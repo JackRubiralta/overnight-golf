@@ -337,7 +337,7 @@ tSpec = 0.12;
     #endif
     col = mix(col, fair, fairW);
     vec3 fg = noised(xz * 9.0);
-    tGrad = mix(tGrad, fg.yz * 9.0 * 0.0045 * vis(fp, 9.0) + cl.yz * 2.2 * 0.004 * vCl, fairW);
+    tGrad = mix(tGrad, fg.yz * 9.0 * 0.0028 * vis(fp, 9.0) + cl.yz * 2.2 * 0.004 * vCl, fairW);
     tRough = mix(tRough, 0.92, fairW);
     tSpec = mix(tSpec, 0.12, fairW);
   }
@@ -391,7 +391,7 @@ tSpec = 0.12;
     col = mix(col, fringe, collarW);
     tRough = mix(tRough, 0.9, collarW);
     tSpec = mix(tSpec, 0.12, collarW);
-    tGrad = mix(tGrad, tGrad * 0.25, collarW);
+    tGrad = mix(tGrad, tGrad * 0.15, collarW);
     float greenW = inside(grD + eN * 0.06, aw);
     if (greenW > 0.001) {
       vec2 d1 = normalize(g.zw + perp(g.zw));
@@ -404,7 +404,7 @@ tSpec = 0.12;
       green *= 0.97 + 0.06 * vnoise(xz * 0.6) + 0.04 * (vnoise(xz * 14.0) - 0.5) * vis(fp, 14.0);
       col = mix(col, green, greenW);
       vec3 gg = noised(xz * 18.0);
-      tGrad = mix(tGrad, gg.yz * 18.0 * 0.004 * vis(fp, 18.0), greenW);
+      tGrad = mix(tGrad, gg.yz * 18.0 * 0.0025 * vis(fp, 18.0), greenW);
       tRough = mix(tRough, 0.82, greenW);
     }
   }

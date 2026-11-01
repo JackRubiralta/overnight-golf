@@ -26,7 +26,7 @@ function putt(backDeg: number, tDown: number) {
 }
 describe('putting', () => {
   it('putt distance scales with stroke length', () => {
-    const rows = [];
+    const rows: [number, number, ReturnType<typeof putt>][] = [];
     for (const [b, td] of [[8, 0.5], [12, 0.5], [18, 0.55], [25, 0.6], [35, 0.6]] as const) rows.push([b, td, putt(b, td)]);
     console.log(rows.map(([b, td, r]) => `back ${b}° tDown ${td}: ${r ? r.dist.toFixed(1) + ' m (club ' + r.speed.toFixed(2) + ' m/s, launch ' + r.launchV.toFixed(1) + ')' : 'no impact'}`).join('\n'));
     const d = rows.map((r) => (r[2] ? r[2].dist : 0));
