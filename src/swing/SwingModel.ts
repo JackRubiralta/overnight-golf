@@ -106,6 +106,7 @@ export class SwingModel {
   constructor(club: Club, opts: { stance?: number; teed?: boolean } = {}) {
     this.club = club;
     this.geo = SwingModel.geometry(club, opts.stance ?? 0, opts.teed ?? false);
+    if (club.kind === 'putter') this.speedScale = 0.75;
     this.reset();
   }
 
@@ -292,7 +293,9 @@ export class SwingModel {
       this.minTheta = theta;
       this.topTime = this.time;
     }
-    if (!this.armed && this.minTheta < -25 * DEG && theta > this.minTheta + 4 * DEG) this.armed = true;
+    const armAt = this.club.kind === 'putter' ? -2.5 * DEG : -25 * DEG;
+    const turn = this.club.kind === 'putter' ? 0.6 * DEG : 4 * DEG;
+    if (!this.armed && this.minTheta < armAt && theta > this.minTheta + turn) this.armed = true;
     if (this.armed && !this.impacted) {
       this.peakHand = Math.max(this.peakHand, Math.hypot(this.handsVel.x, this.handsVel.y));
     }
