@@ -43,7 +43,7 @@ export const CLUBS: Club[] = [
   { id: 'GW', name: 'Gap Wedge', short: 'GW', kind: 'wedge', loft: 50, lie: 64, length: 0.895, headMass: 0.29, smash: 1.22, gear: 0.15, forgiveness: 7, refSpeedMph: 79 },
   { id: 'SW', name: 'Sand Wedge', short: 'SW', kind: 'wedge', loft: 56, lie: 64, length: 0.889, headMass: 0.295, smash: 1.18, gear: 0.15, forgiveness: 7, refSpeedMph: 77 },
   { id: 'LW', name: 'Lob Wedge', short: 'LW', kind: 'wedge', loft: 60, lie: 64, length: 0.883, headMass: 0.3, smash: 1.14, gear: 0.15, forgiveness: 7, refSpeedMph: 75 },
-  { id: 'P', name: 'Putter', short: 'Pt', kind: 'putter', loft: 3, lie: 70, length: 0.864, headMass: 0.35, smash: 1.0, gear: 0, forgiveness: 12, refSpeedMph: 5 },
+  { id: 'P', name: 'Putter', short: 'Pt', kind: 'putter', loft: 3, lie: 70, length: 0.864, headMass: 0.35, smash: 1.4, gear: 0, forgiveness: 12, refSpeedMph: 5 },
 ];
 
 export function clubById(id: string): Club {
