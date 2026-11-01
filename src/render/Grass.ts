@@ -52,8 +52,8 @@ const HEIGHT_MUL = 1.0;
 const WEDGE_MARGIN = 0.12;
 /** Always cover this many metres around the camera (blades beside/behind the near plane). */
 const NEAR_PAD = 2.5;
-const TRANS_TINT = new THREE.Color(1.0, 1.0, 0.55);
-const TRANS_STRENGTH = 1.0;
+const TRANS_TINT = new THREE.Color(1.0, 1.05, 0.6);
+const TRANS_STRENGTH = 0.75;
 /** Multiplier on the PBR specular (direct + IBL). */
 const SPECULAR = 0.25;
 
@@ -265,10 +265,10 @@ function createGrassMaterial(uniforms: Record<string, THREE.IUniform>) {
       .replace('#include <common>', `#include <common>\n${GRASS_FRAGMENT_PARS}`)
       .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal *= faceDirection; // undo DoubleSide flip: normals already face the viewer')
       .replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>\n${GRASS_LIGHT_OVERRIDE}`)
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = vGrassCol * vGrassAO;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = vGrassCol * vGrassAO * (0.8 + 0.2 * (1.0 - vGrassSide * vGrassSide)); // darker, folded edges')
       .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.indirectSpecular *= uSpecular;');
   };
   // All rings share one program (they differ only by uniforms and geometry).
-  mat.customProgramCacheKey = () => 'thornbury-grass-v1';
+  mat.customProgramCacheKey = () => 'thornbury-grass-v2';
   return mat;
 }

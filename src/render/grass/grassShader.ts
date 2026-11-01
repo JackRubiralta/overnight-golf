@@ -36,6 +36,7 @@ uniform float uPixelAngle; // angular size of one screen pixel (rad)
 varying vec3 vGrassCol;
 varying float vGrassAO;
 varying float vGrassTrans;
+varying float vGrassSide; // -1..1 across the blade (edge darkening / midrib)
 #define MOWN_MIN_ANGLE_MUL 4.0
 
 uint gHash(uint x) {
@@ -50,7 +51,7 @@ float gNoise(vec2 p) {
 float gTh(float d, float w) { return 1.0 - smoothstep(-w, w, d); }
 
 vec3 grassShadowPos; // where this vertex looks up the shadow map (see GRASS_SHADOW_POS)
-void grassCull(out vec3 p, out vec3 n) { p = vec3(0.0, -1.0e4, 0.0); grassShadowPos = p; n = vec3(0.0, 1.0, 0.0); vGrassCol = vec3(0.0); vGrassAO = 1.0; vGrassTrans = 0.0; }
+void grassCull(out vec3 p, out vec3 n) { p = vec3(0.0, -1.0e4, 0.0); grassShadowPos = p; n = vec3(0.0, 1.0, 0.0); vGrassCol = vec3(0.0); vGrassAO = 1.0; vGrassTrans = 0.0; vGrassSide = 0.0; }
 
 void grassVertex(out vec3 outPos, out vec3 outN) {
   int N = int(uGridN + 0.5);
@@ -169,10 +170,11 @@ void grassVertex(out vec3 outPos, out vec3 outN) {
 
   // ---- the blade: quadratic curve root → tip, length roughly preserved under bending ----
   float side = position.x;
+  vGrassSide = side;
   float t = position.y;
   float lenNorm = 1.0 / (0.55 + 0.45 * sqrt(1.0 + lm * lm));
   vec3 curve = vec3(lean.x * t * t, t, lean.y * t * t) * h * lenNorm;
-  float wBase = mix(0.0035, mix(0.0065, 0.0085, wDeep), longness) * mix(0.7, 1.3, r6) * uWidth;
+  float wBase = mix(0.0035, mix(0.006, 0.0072, wDeep), longness) * mix(0.7, 1.3, r6) * uWidth;
   // Never thinner than ~1 px: sub-pixel blades alias into sparse speckle without MSAA.
   wBase = max(wBase, dist * uPixelAngle * 0.9);
   float prof = (1.0 - t * t * t) * (0.8 + 0.2 * smoothstep(0.0, 0.3, t)); // full through the middle, rounded taper
@@ -193,26 +195,27 @@ void grassVertex(out vec3 outPos, out vec3 outN) {
   // blade into a bright speck against the grazing-lit ground), partially for long grass.
   // Far away the blades converge to the terrain's look (normal, colour) so the edge is invisible.
   float farK = smoothstep(uRadius * 0.35, uRadius, dist);
-  outN = normalize(mix(nb, vec3(0.0, 1.0, 0.0), mix(mix(0.85, 0.35, longness), 0.9, farK)));
+  outN = normalize(mix(nb, vec3(0.0, 1.0, 0.0), mix(mix(0.85, 0.2, longness), 0.9, farK)));
 
   // ---- colour (linear), matched to the terrain splat per surface ----
   // Palette mirrors the terrain splat (src/render/terrain/terrainShader.ts) so blade roots melt
   // into the ground; dark, saturated albedos (AgX tone mapping lifts them).
   vec3 cRough = mix(vec3(0.046, 0.100, 0.020), vec3(0.062, 0.112, 0.024), nBig) * (0.8 + 0.4 * clump);
-  vec3 cDeep = mix(vec3(0.060, 0.082, 0.024), vec3(0.088, 0.096, 0.032), nMid) * (0.75 + 0.5 * clump);
-  cDeep = mix(cDeep, vec3(0.230, 0.185, 0.085) * (0.75 + 0.5 * clump), fescue * 0.45);
+  vec3 cDeep = mix(vec3(0.052, 0.094, 0.022), vec3(0.080, 0.108, 0.028), nMid) * (0.75 + 0.5 * clump);
+  cDeep = mix(cDeep, vec3(0.150, 0.135, 0.050) * (0.75 + 0.5 * clump), fescue * 0.3);
   vec3 col = mix(cRough, cDeep, wDeep);
   col = mix(col, vec3(0.060, 0.142, 0.024), wCut);
   col = mix(col, vec3(0.082, 0.183, 0.030) * (0.93 + 0.14 * nBig), wFair);
   col = mix(col, vec3(0.084, 0.188, 0.032), wTee);
   col = mix(col, vec3(0.066, 0.164, 0.030), wFringe);
   // Per-blade hue/brightness jitter and dry/straw blades in the long stuff.
-  col *= mix(0.84 + 0.14 * r2, 0.7 + 0.6 * r2 * r2 + 0.2 * r7, longness); // mown blades sit a touch darker than the turf
-  col = mix(col, col * vec3(1.12, 1.0, 0.75), r4 * longness);
-  float dry = step(1.0 - mix(0.03, 0.3, wDeep) * longness, r6);
-  col = mix(col, vec3(0.17, 0.15, 0.07), dry * 0.8);
+  col *= mix(0.84 + 0.14 * r2, 0.62 + 0.75 * r2 * r2 + 0.2 * r7, longness); // mown blades sit a touch darker than the turf
+  col = mix(col, col * vec3(1.22, 1.04, 0.62), r4 * longness);               // yellow-green blades
+  col = mix(col, col * vec3(0.82, 0.98, 1.12), step(r8, 0.22) * longness);   // a few blue-green ones
+  float dry = step(1.0 - mix(0.03, 0.2, wDeep) * longness, r6);
+  col = mix(col, vec3(0.15, 0.135, 0.065), dry * 0.75);
   // Root → tip gradient: tips are lighter and warmer.
-  vec3 tip = col * mix(1.04, 1.3, longness) + vec3(0.01, 0.008, 0.0) * longness;
+  vec3 tip = col * mix(1.04, 1.45, longness) * mix(vec3(1.0), vec3(1.08, 1.0, 0.8), longness);
   col = mix(col, tip, smoothstep(0.2, 1.0, t) * (1.0 - 0.8 * farK));
   if (seed) col = mix(col, vec3(0.26, 0.2, 0.1), smoothstep(0.55, 0.7, t));
   col *= 1.0 + 0.14 * gust * longness;           // gusts flash the lighter blade sides
@@ -237,6 +240,7 @@ export const GRASS_FRAGMENT_PARS = /* glsl */ `
 varying vec3 vGrassCol;
 varying float vGrassAO;
 varying float vGrassTrans;
+varying float vGrassSide;
 uniform vec3 uTransTint;
 uniform float uTransStrength;
 uniform float uSpecular;
@@ -254,8 +258,11 @@ void RE_Direct_Grass( const in IncidentLight directLight, const in vec3 geometry
   // Thin blades have a weak, broad sheen: damp the PBR specular so grazing views don't go white.
   reflectedLight.directSpecular = spec0 + ( reflectedLight.directSpecular - spec0 ) * uSpecular;
   float back = saturate( dot( -geometryNormal, directLight.direction ) );
-  float fwd = pow( saturate( dot( -geometryViewDir, directLight.direction ) ), 5.0 );
-  reflectedLight.directDiffuse += directLight.color * material.diffuseColor * uTransTint * vGrassTrans * uTransStrength * ( 0.35 * back + 2.2 * fwd );
+  float fwd = pow( saturate( dot( -geometryViewDir, directLight.direction ) ), 6.0 );
+  // Light leaving a leaf is filtered by chlorophyll: more saturated than its reflected colour.
+  vec3 albedo = material.diffuseColor;
+  vec3 trans = albedo * albedo / max( dot( albedo, vec3( 0.3333 ) ), 1e-3 );
+  reflectedLight.directDiffuse += directLight.color * trans * uTransTint * vGrassTrans * uTransStrength * ( 0.5 * back + 1.1 * fwd );
 }
 #undef RE_Direct
 #define RE_Direct RE_Direct_Grass

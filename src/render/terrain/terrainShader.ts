@@ -219,7 +219,11 @@ tSpec = 0.12;
   float v21 = vis(fp, 2.1), v73 = vis(fp, 7.3);
   float eN = (vnoise(xz * 0.45) - 0.5) * 0.55 + (vnoise(xz * 2.1 + 3.3) - 0.5) * 0.24 * v21 + (vnoise(xz * 7.3) - 0.5) * 0.12 * v73;
   float aw = max(0.03, fp * 0.7);                           // antialiased edge half-width
-  float dryness = sat((mac1 - 0.5) * 1.4 - curvL * 0.2 + slope * 1.0);
+  // Rim hills at the world edge (forest + rock instead of course grasses).
+  float edge = max(abs(xz.x), abs(xz.y));
+  float rim = smoothstep(520.0, 680.0, edge + (mac2 - 0.5) * 120.0);
+  rim *= smoothstep(30.0, 70.0, corridor + (mac2 - 0.5) * 30.0);   // holes run close to the edge
+  float dryness = sat((mac1 - 0.5) * 1.4 - curvL * 0.2 + slope * 1.0) * (1.0 - 0.8 * rim);
   float lush = sat(curvL * 0.35 + curvS * 0.15);
 
   // ---- rough / deep rough (base layer everywhere)
@@ -233,14 +237,28 @@ tSpec = 0.12;
   vec3 rough = mix(vec3(${C.roughA}), vec3(${C.roughB}), mac2) * (0.84 + 0.32 * clump);
   rough = mix(rough, vec3(${C.straw}), dryness * 0.12);
   rough *= 1.0 + lush * 0.12 * vec3(-0.3, 0.2, -0.4);
-  float deepW = smoothstep(17.0, 30.0, corridor + eN * 10.0 + (mac2 - 0.5) * 14.0);
+  // Mid-scale patchiness (~3 m and ~13 m): lighter/yellower vs darker/bluer clumps. Low enough
+  // in frequency to survive at distance, so far rough never reads as a flat smear.
+  float pA = mix(0.5, vnoise(xz * 0.31 + 4.1), vis(fp, 0.31));
+  float pB = vnoise(xz * 0.075 - 2.3);
+  float patchN = pA * 0.45 + pB * 0.55;
+  rough *= 0.84 + 0.32 * patchN;
+  rough = mix(rough, vec3(${C.straw}), smoothstep(0.6, 0.85, patchN) * (0.12 + 0.2 * dryness));
+  float deepW = smoothstep(17.0, 30.0, corridor + eN * 10.0 + (mac2 - 0.5) * 14.0 + (pB - 0.5) * 8.0);
   // fescue: ~10 m patches, broken up by tufts that fade out with distance
   float tuftN = mix(0.5, vnoise(xz * 0.7 + 11.0), vis(fp, 0.7));
   float tuft = smoothstep(0.5, 0.8, fbm(xz * 0.07 + 2.0, 2) * 0.65 + mac2 * 0.25 + dryness * 0.2 + (tuftN - 0.5) * 0.3);
-  vec3 deep = mix(vec3(${C.deepA}), vec3(${C.deepB}), mac1) * (0.72 + 0.56 * clump);
-  deep = mix(deep, vec3(${C.fescue}) * (0.75 + 0.5 * clump), tuft * (0.3 + 0.35 * dryness));
+  vec3 deep = mix(vec3(${C.deepA}), vec3(${C.deepB}), mac1) * (0.72 + 0.56 * clump) * (0.82 + 0.36 * patchN);
+  deep = mix(deep, vec3(${C.fescue}) * (0.75 + 0.5 * clump), tuft * (0.3 + 0.35 * dryness) * (1.0 - rim));
   vec3 col = mix(rough, deep, deepW);
   tGrad = cl.yz * 2.2 * mix(0.03, 0.07, deepW) * vCl;
+  // Hummocks (~3 m, 10-25 cm high): lighting texture that still reads from far away.
+  #if TERRAIN_DETAIL > 0
+  {
+    vec3 hk = noised(xz * 0.33 + 7.3);
+    tGrad += hk.yz * 0.33 * mix(0.14, 0.3, deepW) * vis(fp, 0.33);
+  }
+  #endif
   #if TERRAIN_DETAIL > 1
   {
     vec3 tf = noised(xz * 5.5 + 2.0);                        // individual tufts
@@ -259,15 +277,13 @@ tSpec = 0.12;
   }
 
   // ---- rim hills: meadow, forest canopy (seen from afar) and rock on steep ground
-  float edge = max(abs(xz.x), abs(xz.y));
-  float rim = smoothstep(540.0, 720.0, edge + (mac2 - 0.5) * 120.0);
   if (rim > 0.001) {
     // Forest canopy: tree crowns as bumps (~6 m) with dark gaps; only once far enough away
     // not to look painted on. Stand type (dark conifer / lighter broadleaf) varies per ~60 m.
     vec3 cr = fbmd(xz * 0.16 + 4.0, 2);
     float crown = cr.x;
     float clearing = smoothstep(0.68, 0.78, mac1 + (mid - 0.5) * 0.15 + max(-curvL, 0.0) * 0.1);
-    float canopyW = rim * (1.0 - clearing) * smoothstep(90.0, 260.0, dist);
+    float canopyW = rim * (1.0 - clearing) * smoothstep(60.0, 180.0, dist);
     float stand = smoothstep(0.35, 0.65, mac2);
     vec3 canopy = mix(vec3(${C.canopyA}), vec3(${C.canopyB}), stand);
     canopy *= 0.75 + 0.5 * hash12(floor(xz * 0.16 + 0.5));
@@ -328,6 +344,13 @@ tSpec = 0.12;
     float b = sw * grain(view);
     vec3 fair = mix(vec3(${C.fairwayA}), vec3(${C.fairwayB}), 0.5 + 0.5 * b);
     fair *= (0.93 + 0.14 * mac2) * (0.95 + 0.1 * clump);
+    // Blade streaks: the mower leaves fine lines along its direction of travel.
+    {
+      vec2 pd = perp(dir);
+      float streak = vnoise(vec2(dot(xz, dir) * 0.5, dot(xz, pd) * 9.0));
+      fair *= 1.0 + (streak - 0.5) * 0.16 * vis(LFP(pd), 9.0);
+      fair *= 1.0 + (vnoise(xz * 0.9 + 3.0) - 0.5) * 0.08 * vis(fp, 0.9); // ~1 m wear / thickness
+    }
     fair = mix(fair, vec3(${C.straw}), dryness * 0.12);
     // sparse divots / sandy repair marks
     #if TERRAIN_DETAIL > 0
@@ -336,8 +359,9 @@ tSpec = 0.12;
     fair = mix(fair, vec3(${C.divot}), dv * 0.8);
     #endif
     col = mix(col, fair, fairW);
-    vec3 fg = noised(xz * 9.0);
-    tGrad = mix(tGrad, fg.yz * 9.0 * 0.0028 * vis(fp, 9.0) + cl.yz * 2.2 * 0.004 * vCl, fairW);
+    // Very gentle relief: at grazing golden-hour light, stronger relief reads as sand ripples.
+    vec3 fg = noised(xz * 13.0);
+    tGrad = mix(tGrad, fg.yz * 13.0 * 0.0011 * vis(fp, 13.0) + cl.yz * 2.2 * 0.003 * vCl, fairW);
     tRough = mix(tRough, 0.92, fairW);
     tSpec = mix(tSpec, 0.12, fairW);
   }
@@ -371,6 +395,10 @@ tSpec = 0.12;
     float lat = dot(xz - t.xy, perp(dir));
     float sw = stripeWave(lat / ${f(TEE_STRIPE_W)} + 0.5, LFP(perp(dir)) / ${f(TEE_STRIPE_W)});
     vec3 tee = vec3(${C.tee}) * (1.0 + 0.12 * sw * grain(dot(viewXZ, dir))) * (0.95 + 0.1 * clump);
+    // blade streaks along the mowing direction + ~1 m wear where golfers stand
+    float streak = vnoise(vec2(dot(xz, dir) * 0.6, lat * 11.0));
+    tee *= 1.0 + (streak - 0.5) * 0.16 * vis(LFP(perp(dir)), 11.0);
+    tee *= 1.0 + (vnoise(xz * 0.8 + 1.7) - 0.5) * 0.12 * vis(fp, 0.8);
     float dv = smoothstep(0.86, 0.93, vnoise(xz * 4.0) * 0.6 + vnoise(xz * 11.0) * 0.4) * vis(fp, 8.0);
     tee = mix(tee, vec3(${C.divot}), dv * 0.5);
     col = mix(col, tee, teeW);
@@ -400,11 +428,14 @@ tSpec = 0.12;
       float s1 = stripeWave(dot(rel, d2) / W + 0.5, LFP(d2) / W);
       float s2 = stripeWave(dot(rel, d1) / W + 0.5, LFP(d1) / W);
       float b = s1 * grain(dot(viewXZ, d1)) + s2 * grain(dot(viewXZ, d2));
-      vec3 green = mix(vec3(${C.greenA}), vec3(${C.greenB}), 0.5 + 0.35 * b);
-      green *= 0.97 + 0.06 * vnoise(xz * 0.6) + 0.04 * (vnoise(xz * 14.0) - 0.5) * vis(fp, 14.0);
+      vec3 green = mix(vec3(${C.greenA}), vec3(${C.greenB}), 0.5 + 0.42 * b);
+      // soft ~2 m density variation + very fine speckle (individual blade tips)
+      green *= 0.96 + 0.08 * vnoise(xz * 0.6) + 0.05 * (vnoise(xz * 0.17 + 9.0) - 0.5);
+      green *= 1.0 + (vnoise(xz * 45.0) - 0.5) * 0.12 * vis(fp, 45.0) + (vnoise(xz * 9.0) - 0.5) * 0.05 * vis(fp, 9.0);
       col = mix(col, green, greenW);
-      vec3 gg = noised(xz * 18.0);
-      tGrad = mix(tGrad, gg.yz * 18.0 * 0.0025 * vis(fp, 18.0), greenW);
+      // Almost no detail relief: a putting surface is smooth (strong relief reads as ripples).
+      vec3 gg = noised(xz * 7.0);
+      tGrad = mix(tGrad, gg.yz * 7.0 * 0.0012 * vis(fp, 7.0), greenW);
       tRough = mix(tRough, 0.82, greenW);
     }
   }
