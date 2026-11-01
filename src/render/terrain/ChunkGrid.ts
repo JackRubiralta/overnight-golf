@@ -64,7 +64,8 @@ export function buildLevelGeometry(step: number, cell: number): THREE.BufferGeom
     const t1 = b1 * n + a1;
     const s0 = start + k;
     const s1 = start + ((k + 1) % ring.length);
-    idx.push(t0, s0, t1, t1, s0, s1);
+    // Both windings: the skirt must hide cracks whichever side it is seen from.
+    idx.push(t0, s0, t1, t1, s0, s1, t0, t1, s0, t1, s1, s0);
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));

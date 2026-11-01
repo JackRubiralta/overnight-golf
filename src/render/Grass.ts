@@ -15,7 +15,7 @@
  */
 import * as THREE from 'three';
 import { createBladeGeometry } from './grass/bladeGeometry';
-import { GRASS_FRAGMENT_PARS, GRASS_LIGHT_OVERRIDE, GRASS_VERTEX_PARS } from './grass/grassShader';
+import { GRASS_FRAGMENT_PARS, GRASS_LIGHT_OVERRIDE, GRASS_SHADOW_POS, GRASS_VERTEX_PARS } from './grass/grassShader';
 import { courseUniforms, globalUniforms, type FrameContext, type InitContext, type QualityPreset, type RenderModule } from './shared';
 
 // ---------------------------------------------------------------- tuning
@@ -259,9 +259,11 @@ function createGrassMaterial(uniforms: Record<string, THREE.IUniform>) {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${GRASS_VERTEX_PARS}`)
       .replace('#include <beginnormal_vertex>', 'vec3 grassPos;\nvec3 grassN;\ngrassVertex(grassPos, grassN);\nvec3 objectNormal = grassN;')
-      .replace('#include <begin_vertex>', 'vec3 transformed = grassPos;');
+      .replace('#include <begin_vertex>', 'vec3 transformed = grassPos;')
+      .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>\n${GRASS_SHADOW_POS}`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${GRASS_FRAGMENT_PARS}`)
+      .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal *= faceDirection; // undo DoubleSide flip: normals already face the viewer')
       .replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>\n${GRASS_LIGHT_OVERRIDE}`)
       .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = vGrassCol * vGrassAO;')
       .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.indirectSpecular *= uSpecular;');

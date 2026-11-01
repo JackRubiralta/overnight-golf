@@ -49,7 +49,8 @@ float gNoise(vec2 p) {
 }
 float gTh(float d, float w) { return 1.0 - smoothstep(-w, w, d); }
 
-void grassCull(out vec3 p, out vec3 n) { p = vec3(0.0, -1.0e4, 0.0); n = vec3(0.0, 1.0, 0.0); vGrassCol = vec3(0.0); vGrassAO = 1.0; vGrassTrans = 0.0; }
+vec3 grassShadowPos; // where this vertex looks up the shadow map (see GRASS_SHADOW_POS)
+void grassCull(out vec3 p, out vec3 n) { p = vec3(0.0, -1.0e4, 0.0); grassShadowPos = p; n = vec3(0.0, 1.0, 0.0); vGrassCol = vec3(0.0); vGrassAO = 1.0; vGrassTrans = 0.0; }
 
 void grassVertex(out vec3 outPos, out vec3 outN) {
   int N = int(uGridN + 0.5);
@@ -177,9 +178,16 @@ void grassVertex(out vec3 outPos, out vec3 outN) {
   float prof = (1.0 - t * t * t) * (0.8 + 0.2 * smoothstep(0.0, 0.3, t)); // full through the middle, rounded taper
   if (seed) prof = t < 0.62 ? 0.3 : 0.3 + 1.5 * sin(3.14159 * clamp((t - 0.62) / 0.38, 0.0, 1.0));
   outPos = root + curve + sideV * side * wBase * prof;
+  // Shadows are looked up low on the blade so it takes the same shadow as the ground it grows
+  // from: with a low sun the shadow map's grazing-angle error would otherwise leave tips lit
+  // above shadowed turf (bright speckle). Long grass keeps more of its own height.
+  grassShadowPos = mix(root, outPos, mix(0.1, 0.45, longness));
 
   vec3 tng = normalize(vec3(2.0 * t * lean.x, 1.0, 2.0 * t * lean.y));
   vec3 nb = normalize(cross(tng, sideV));
+  // Always shade the side facing the viewer (the fragment stage cancels three's back-face flip,
+  // which would otherwise turn the up-biased normal of every back face downward → black blades).
+  if (dot(nb, cameraPosition - outPos) < 0.0) nb = -nb;
   nb = normalize(nb + sideV * side * 0.45);      // rounded cross-section
   // Bias toward the ground normal: fully for mown turf (so a low sun doesn't turn every vertical
   // blade into a bright speck against the grazing-lit ground), partially for long grass.
@@ -199,7 +207,7 @@ void grassVertex(out vec3 outPos, out vec3 outN) {
   col = mix(col, vec3(0.084, 0.188, 0.032), wTee);
   col = mix(col, vec3(0.066, 0.164, 0.030), wFringe);
   // Per-blade hue/brightness jitter and dry/straw blades in the long stuff.
-  col *= mix(0.84 + 0.14 * r2, 0.8 + 0.4 * r2, longness); // mown blades sit a touch darker than the turf
+  col *= mix(0.84 + 0.14 * r2, 0.7 + 0.6 * r2 * r2 + 0.2 * r7, longness); // mown blades sit a touch darker than the turf
   col = mix(col, col * vec3(1.12, 1.0, 0.75), r4 * longness);
   float dry = step(1.0 - mix(0.03, 0.3, wDeep) * longness, r6);
   col = mix(col, vec3(0.17, 0.15, 0.07), dry * 0.8);
@@ -215,6 +223,13 @@ void grassVertex(out vec3 outPos, out vec3 outN) {
   vGrassAO = mix(aoBase, 1.0, smoothstep(0.0, 0.85, t));
   vGrassTrans = mix(0.08, 0.85, longness) * smoothstep(0.05, 0.6, t) * (1.0 - 0.6 * farK);
 }
+`;
+
+/** Inserted after <worldpos_vertex>: only the shadow lookup uses worldPosition from here on. */
+export const GRASS_SHADOW_POS = /* glsl */ `
+#if defined( USE_SHADOWMAP )
+  worldPosition.xyz = grassShadowPos;
+#endif
 `;
 
 /** Fragment declarations (after <common>). */

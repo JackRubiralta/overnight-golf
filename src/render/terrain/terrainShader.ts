@@ -137,6 +137,9 @@ float stripeWave(float t, float fpT) {
   float s = sin(3.14159265 * t);
   return clamp(s / max(3.14159265 * fpT * 1.2, 0.02), -1.0, 1.0) * (1.0 - smoothstep(0.3, 0.8, fpT));
 }
+// Mowing 'grain': blades laid away from the viewer look lighter, toward the viewer darker.
+// v = dot(view direction, mowing direction); a small constant keeps stripes readable side-on.
+float grain(float v) { return clamp(v * 3.0, -1.0, 1.0) * (0.3 + 0.55 * abs(v)) + 0.15; }
 vec2 perp(vec2 v) { return vec2(-v.y, v.x); }
 float sat(float x) { return clamp(x, 0.0, 1.0); }
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
@@ -182,7 +185,7 @@ export const TERRAIN_SURFACE = /* glsl */ `
 #define LFP(g) (abs(dot(g, dX)) + abs(dot(g, dY)))
 tGrad = vec2(0.0);
 tRough = 0.95;
-tSpec = 0.3;
+tSpec = 0.12;
 {
   vec3 wp = vWorldPos;
   vec2 xz = wp.xz;
@@ -300,7 +303,7 @@ tSpec = 0.3;
   if (cutW > 0.001) {
     vec3 cut = vec3(${C.firstCut}) * (0.9 + 0.2 * clump) * (0.94 + 0.12 * mac2);
     col = mix(col, cut, cutW);
-    tSpec = mix(tSpec, 0.3, cutW);
+    tSpec = mix(tSpec, 0.12, cutW);
     tGrad = mix(tGrad, tGrad * 0.45, cutW);
   }
 
@@ -314,13 +317,15 @@ tSpec = 0.3;
       vec2 ab = s.zw - s.xy; float L = length(ab); vec2 d = ab / L; vec2 ap = xz - s.xy;
       float t = clamp(dot(ap, d), 0.0, L);
       float dd = length(ap - d * t);
-      if (dd < best) { best = dd; dir = d; lat = d.x * ap.y - d.y * ap.x; }
+      // signed distance to the centre-line polyline: continuous across segment joints, so the
+      // stripes follow the fairway around doglegs like a real mower would
+      if (dd < best) { best = dd; dir = d; lat = (d.x * ap.y - d.y * ap.x < 0.0 ? -dd : dd); }
     }
     lat += (vnoise(xz * 0.04) - 0.5) * 2.0;              // mower lines are never perfectly straight
     float W = ${f(FAIRWAY_STRIPE_W)};
     float sw = stripeWave(lat / W + 0.5, LFP(perp(dir)) / W);
     float view = dot(viewXZ, dir);
-    float b = sw * (0.65 * view + 0.35);
+    float b = sw * grain(view);
     vec3 fair = mix(vec3(${C.fairwayA}), vec3(${C.fairwayB}), 0.5 + 0.5 * b);
     fair *= (0.93 + 0.14 * mac2) * (0.95 + 0.1 * clump);
     fair = mix(fair, vec3(${C.straw}), dryness * 0.12);
@@ -334,7 +339,7 @@ tSpec = 0.3;
     vec3 fg = noised(xz * 9.0);
     tGrad = mix(tGrad, fg.yz * 9.0 * 0.0045 * vis(fp, 9.0) + cl.yz * 2.2 * 0.004 * vCl, fairW);
     tRough = mix(tRough, 0.92, fairW);
-    tSpec = mix(tSpec, 0.3, fairW);
+    tSpec = mix(tSpec, 0.12, fairW);
   }
 
   // ---- cart paths: asphalt with worn wheel tracks, crumbly edges and gravel shoulders
@@ -365,12 +370,12 @@ tSpec = 0.3;
     vec2 dir = t.zw;
     float lat = dot(xz - t.xy, perp(dir));
     float sw = stripeWave(lat / ${f(TEE_STRIPE_W)} + 0.5, LFP(perp(dir)) / ${f(TEE_STRIPE_W)});
-    vec3 tee = vec3(${C.tee}) * (1.0 + 0.1 * sw * (0.7 * dot(viewXZ, dir) + 0.3)) * (0.95 + 0.1 * clump);
+    vec3 tee = vec3(${C.tee}) * (1.0 + 0.12 * sw * grain(dot(viewXZ, dir))) * (0.95 + 0.1 * clump);
     float dv = smoothstep(0.86, 0.93, vnoise(xz * 4.0) * 0.6 + vnoise(xz * 11.0) * 0.4) * vis(fp, 8.0);
     tee = mix(tee, vec3(${C.divot}), dv * 0.5);
     col = mix(col, tee, teeW);
     tRough = mix(tRough, 0.92, teeW);
-    tSpec = mix(tSpec, 0.3, teeW);
+    tSpec = mix(tSpec, 0.12, teeW);
     tGrad = mix(tGrad, tGrad * 0.2, teeW);
   }
 
@@ -385,7 +390,7 @@ tSpec = 0.3;
     fringe *= 1.0 + 0.06 * stripeWave(grD / 0.9, fpGr / 0.9);
     col = mix(col, fringe, collarW);
     tRough = mix(tRough, 0.9, collarW);
-    tSpec = mix(tSpec, 0.3, collarW);
+    tSpec = mix(tSpec, 0.12, collarW);
     tGrad = mix(tGrad, tGrad * 0.25, collarW);
     float greenW = inside(grD + eN * 0.06, aw);
     if (greenW > 0.001) {
@@ -394,7 +399,7 @@ tSpec = 0.3;
       float W = ${f(GREEN_STRIPE_W)};
       float s1 = stripeWave(dot(rel, d2) / W + 0.5, LFP(d2) / W);
       float s2 = stripeWave(dot(rel, d1) / W + 0.5, LFP(d1) / W);
-      float b = s1 * (0.6 * dot(viewXZ, d1) + 0.4) + s2 * (0.6 * dot(viewXZ, d2) + 0.4);
+      float b = s1 * grain(dot(viewXZ, d1)) + s2 * grain(dot(viewXZ, d2));
       vec3 green = mix(vec3(${C.greenA}), vec3(${C.greenB}), 0.5 + 0.35 * b);
       green *= 0.97 + 0.06 * vnoise(xz * 0.6) + 0.04 * (vnoise(xz * 14.0) - 0.5) * vis(fp, 14.0);
       col = mix(col, green, greenW);
@@ -441,8 +446,8 @@ tSpec = 0.3;
     col = mix(col, mud, mudW);
     vec3 pb = noised(xz * 8.0);
     tGrad = mix(tGrad, pb.yz * 8.0 * 0.03 * vis(fp, 8.0), mudW);
-    tRough = mix(tRough, 0.6, mudW * smoothstep(0.6, -0.2, waD) * smoothstep(-1.5, -0.3, waD));
-    tSpec = mix(tSpec, mix(0.9, 0.25, smoothstep(0.0, -0.6, waD)), mudW);
+    tRough = mix(tRough, 0.72, mudW * smoothstep(0.6, -0.2, waD) * smoothstep(-1.5, -0.3, waD));
+    tSpec = mix(tSpec, mix(0.45, 0.2, smoothstep(0.0, -0.6, waD)), mudW);
   }
 
   // ---- global: cavity darkening, rain wetness

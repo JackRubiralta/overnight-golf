@@ -34,6 +34,9 @@ export function createBladeGeometry(rows: number[], blades: number, instanceCoun
   }
   const g = new THREE.InstancedBufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  // Unused by the shader (normals are computed procedurally), but three forces FLAT_SHADED on
+  // Standard materials whose geometry lacks a normal attribute, which would discard ours.
+  g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(pos.length), 3));
   g.setIndex(idx);
   g.instanceCount = instanceCount;
   // Placement happens on the GPU around the camera; never let three cull or measure it.
