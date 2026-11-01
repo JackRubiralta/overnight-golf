@@ -1,0 +1,20 @@
+// Smoke test: load the game, start hole N, take a screenshot, print console errors.
+import { chromium } from './pw.mjs';
+const port = process.argv[2] || '5173';
+const out = process.argv[3] || 'screenshots/_tmp/smoke.png';
+const query = process.argv[4] || '?play=0';
+const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const errors = [];
+page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()}`); });
+page.on('pageerror', (e) => errors.push(`[pageerror] ${e.stack || e}`));
+const t0 = Date.now();
+await page.goto(`http://localhost:${port}/${query}`);
+await page.waitForFunction(() => window.__ready === true, null, { timeout: 240000 }).catch(() => errors.push('timeout'));
+console.log('ready in', Date.now() - t0, 'ms');
+await page.waitForTimeout(3000);
+const state = await page.evaluate(() => { const g = window.__game; return g ? { mode: g.mode, hole: g.hole, strokes: g.strokes, ball: g.ball, swing: g.swing, stats: g.stats() } : null; });
+console.log(JSON.stringify(state));
+await page.screenshot({ path: out, timeout: 120000 });
+for (const e of [...new Set(errors)].slice(0, 30)) console.log(e.slice(0, 400));
+await browser.close();

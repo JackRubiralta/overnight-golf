@@ -42,7 +42,7 @@ export class World {
     this.renderer.toneMapping = THREE.AgXToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.domElement.id = 'game-canvas';
     canvasParent.appendChild(this.renderer.domElement);
 
