@@ -70,8 +70,12 @@ export class SwingModel {
   hThetaVel = 0;
   hRho = 0.62;
   hRhoVel = 0;
-  /** Where the player is dragging the hands to. */
+  /** Where the player is dragging the hands to (derived from the cursor). */
   target: Vec2 = { x: 0, y: 0 };
+  /** The player's virtual cursor. Its angle maps 1:1 to the hands, but its radial distance
+   *  from the arm circle is scaled by radialGain, so contact (fat/thin) is controllable. */
+  cursor: Vec2 = { x: 0, y: 0 };
+  radialGain = 0.2;
   /** Club angle from straight down (rad, + toward target) and its angular velocity. */
   phi = 0;
   phiVel = 0;
@@ -110,11 +114,11 @@ export class SwingModel {
     // Projected club length into the swing plane (shaft is inclined at its lie angle).
     const clubLen = club.length * Math.sin(club.lie * DEG) * 0.98;
     const sweetH = club.kind === 'driver' ? 0.03 : club.kind === 'wood' ? 0.022 : club.kind === 'putter' ? 0.016 : 0.018;
-    const teeH = teed ? (club.kind === 'driver' ? 0.032 : 0.012) : 0;
+    const teeH = teed ? (club.kind === 'driver' ? 0.02 : 0.012) : 0;
     // Stance forward (+) moves the body toward the target = the ball sits further back.
     const ballX = -stance * 0.09 + (club.kind === 'driver' ? 0.07 : club.kind === 'wood' ? 0.04 : 0.0);
     // Shoulders are set so that straight arms + straight club just reach the ground below.
-    const shoulder = { x: 0, y: armLen + clubLen - 0.01 };
+    const shoulder = { x: 0, y: armLen + clubLen - 0.014 };
     return { shoulder, armLen, clubLen, ballX, ballY: BALL_R + teeH, sweetH };
   }
 
@@ -128,6 +132,7 @@ export class SwingModel {
     const theta = 0;
     this.hands = { x: g.shoulder.x + Math.sin(theta) * g.armLen, y: g.shoulder.y - Math.cos(theta) * g.armLen };
     this.target = { ...this.hands };
+    this.cursor = { ...this.hands };
     this.lastTarget = { ...this.hands };
     this.handsVel = { x: 0, y: 0 };
     this.hTheta = theta;
@@ -169,30 +174,38 @@ export class SwingModel {
   /** Move the hand target by a delta in swing-plane metres (from mouse/stick). */
   drag(dx: number, dy: number) {
     const g = this.geo;
-    let tx = this.target.x + dx;
-    let ty = this.target.y + dy;
-    // Constrain to the reachable annulus around the shoulder (arms may "dip" 3% past full extension).
-    const rx = tx - g.shoulder.x;
-    const ry = ty - g.shoulder.y;
-    const r = Math.hypot(rx, ry);
-    const rMax = g.armLen * 1.035;
-    const rMin = g.armLen * 0.35;
-    if (r > rMax || r < rMin) {
-      const k = (r > rMax ? rMax : rMin) / Math.max(r, 1e-6);
-      tx = g.shoulder.x + rx * k;
-      ty = g.shoulder.y + ry * k;
+    let cx = this.cursor.x + dx;
+    let cy = this.cursor.y + dy;
+    // The cursor lives in a generous annulus around the shoulder.
+    let rx = cx - g.shoulder.x;
+    let ry = cy - g.shoulder.y;
+    let r = Math.hypot(rx, ry);
+    const cMax = g.armLen * 1.6;
+    const cMin = g.armLen * 0.3;
+    if (r > cMax || r < cMin) {
+      const k = (r > cMax ? cMax : cMin) / Math.max(r, 1e-6);
+      rx *= k;
+      ry *= k;
+      r = Math.hypot(rx, ry);
     }
     // Limit arm rotation range.
-    let th = Math.atan2(tx - g.shoulder.x, g.shoulder.y - ty);
-    const lim = Math.min(Math.abs(th), th < 0 ? SWING.maxBackswing : SWING.maxFollow);
-    if (Math.abs(th) > lim) {
-      th = Math.sign(th) * lim;
-      const rr = Math.hypot(tx - g.shoulder.x, ty - g.shoulder.y);
-      tx = g.shoulder.x + Math.sin(th) * rr;
-      ty = g.shoulder.y - Math.cos(th) * rr;
-    }
-    this.target.x = tx;
-    this.target.y = ty;
+    let th = Math.atan2(rx, -ry);
+    const lim = th < 0 ? SWING.maxBackswing : SWING.maxFollow;
+    if (Math.abs(th) > lim) th = Math.sign(th) * lim;
+    cx = g.shoulder.x + Math.sin(th) * r;
+    cy = g.shoulder.y - Math.cos(th) * r;
+    this.cursor.x = cx;
+    this.cursor.y = cy;
+    // Hand target: same angle, radial error scaled down, clamped to what the arms can reach.
+    let hr = g.armLen + (r - g.armLen) * this.radialGain;
+    hr = Math.min(g.armLen * 1.035, Math.max(g.armLen * 0.35, hr));
+    this.target.x = g.shoulder.x + Math.sin(th) * hr;
+    this.target.y = g.shoulder.y - Math.cos(th) * hr;
+  }
+
+  /** Cursor radius range (fraction of arm length) that gives clean contact. */
+  sweetRing(): [number, number] {
+    return [1 - 0.012 / this.radialGain, 1 + 0.014 / this.radialGain];
   }
 
   /**
@@ -218,8 +231,8 @@ export class SwingModel {
     // Hand auto-return toward address when released (before impact only).
     if (!this.grabbing && this.autoReturn && !this.armed) {
       const home = { x: g.shoulder.x, y: g.shoulder.y - g.armLen };
-      this.target.x += (home.x - this.target.x) * Math.min(1, dt * 2.5);
-      this.target.y += (home.y - this.target.y) * Math.min(1, dt * 2.5);
+      const k = Math.min(1, dt * 2.5);
+      this.drag((home.x - this.cursor.x) * k, (home.y - this.cursor.y) * k);
     }
 
     // Hands: springs toward the target in POLAR coordinates around the shoulder, so the

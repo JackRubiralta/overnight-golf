@@ -88,6 +88,9 @@ export class SwingController {
   private rebuildModel() {
     this.model = new SwingModel(this.club, { stance: this.stance, teed: this.teed && this.club.kind !== 'putter' });
     this.model.autoReturn = true;
+    // Contact tolerance per assist level (research: the original's margin felt too small).
+    const a = settings.get('assist');
+    this.model.radialGain = a === 'off' ? 0.2 : a === 'light' ? 0.13 : 0.08;
   }
 
   resetFacePath() {
@@ -185,12 +188,16 @@ export class SwingController {
     const uy = this.smoothDy * take;
     this.smoothDx -= ux;
     this.smoothDy -= uy;
+    // Face-on panel: target is on the screen's LEFT. Mouse right/up → hands back/up (backswing);
+    // swiftly down (and left) → downswing. The movement is spread evenly over the physics
+    // sub-steps of this frame so the hand target moves smoothly.
+    let dragX = 0;
+    let dragY = 0;
     if (grab) {
-      // Face-on panel: target is on the screen's LEFT. Mouse right/up → hands back/up (backswing);
-      // swiftly down (and left) → downswing.
       const sx = settings.get('invertSwingX') ? 1 : -1;
       const sy = settings.get('invertSwingY') ? 1 : -1;
-      m.drag(ux * sens * sx, uy * sens * sy);
+      dragX = ux * sens * sx;
+      dragY = uy * sens * sy;
     } else {
       this.smoothDx = this.smoothDy = 0;
     }
@@ -208,7 +215,7 @@ export class SwingController {
       const rho = m.geo.armLen * (0.99 + 0.045 * Math.max(0, mag - 0.9) / 0.1);
       const tx = m.geo.shoulder.x + Math.sin(th) * rho;
       const ty = m.geo.shoulder.y - Math.cos(th) * rho;
-      m.drag(tx - m.target.x, ty - m.target.y);
+      m.drag(tx - m.cursor.x, ty - m.cursor.y);
     }
 
     this.updateDrift(dt);
@@ -216,8 +223,10 @@ export class SwingController {
     // Fixed-step simulation.
     let result: SwingResult | null = null;
     this.acc += Math.min(dt, 0.1);
+    const steps = Math.max(1, Math.floor(this.acc / SIM_DT));
     while (this.acc >= SIM_DT) {
       this.acc -= SIM_DT;
+      if (dragX || dragY) m.drag(dragX / steps, dragY / steps);
       const imp = m.step(SIM_DT, !this.practice);
       if (m.armed) {
         const hs = Math.hypot(m.handsVel.x, m.handsVel.y);
@@ -259,7 +268,8 @@ export class SwingController {
     const lieTwist = SURFACES[this.lie].lieTwist;
     const faceAngle = this.face + this.faceDrift + flailFace;
     const path = this.path + this.pathDrift;
-    let dynamicLoft = club.loft - imp.shaftLean * 0.8 + Math.max(0, this.face) * 0.3 - this.stance * 3;
+    const loftBias: Record<string, number> = { driver: 3, wood: 1.5, hybrid: 0.5, iron: -1, wedge: -2, putter: 0 };
+    let dynamicLoft = club.loft + (loftBias[club.kind] ?? 0) - imp.shaftLean * 0.8 + Math.max(0, this.face) * 0.3 - this.stance * 3;
     if (club.kind === 'putter') dynamicLoft = club.loft - imp.shaftLean * 0.5;
     dynamicLoft = clamp(dynamicLoft, -5, 75);
     const fat = clamp(imp.fatDepth / 0.03, 0, 1);
@@ -297,7 +307,7 @@ export class SwingController {
       armLen: m.geo.armLen,
       clubLen: m.geo.clubLen,
       hands: m.hands,
-      target: m.target,
+      target: m.cursor,
       clubhead: m.clubhead(),
       phi: m.phi,
       ballX: m.geo.ballX,
@@ -308,7 +318,7 @@ export class SwingController {
       ghostPath: settings.get('showGhostSwing') ? this.ghostPath : [],
       path: m.path,
       practice: this.practice,
-      sweetRing: [0.975, 1.015],
+      sweetRing: m.sweetRing(),
     };
   }
 

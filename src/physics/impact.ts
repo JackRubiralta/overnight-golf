@@ -103,11 +103,14 @@ export function computeLaunch(d: ClubDelivery, rng: () => number = Math.random):
 
   // Spin rate: power law with saturation, fitted to TrackMan tour averages
   // (driver 2686 rpm @ SL 14.3°, 7i 7097 @ 27.6°, PW 9304 @ 37°).
-  let spinRpm = (0.0881 * d.clubSpeed * Math.pow(spinLoft, 2.5)) / (1 + (spinLoft / 27) ** 2);
+  let spinRpm =
+    spinLoft < 14.3
+      ? 215 * d.clubSpeed * Math.sin(spinLoft * DEG) // low spin loft: ~linear in sin(SL)
+      : (0.0881 * d.clubSpeed * Math.pow(spinLoft, 2.5)) / (1 + (spinLoft / 27) ** 2);
   if (spinLoft > 50) spinRpm *= clamp(1 - (spinLoft - 50) / 60, 0.35, 1); // ball slides up the face
   spinRpm *= lie.lieSpin;
   spinRpm *= 1 - 0.5 * clamp(d.fat, 0, 1);
-  spinRpm -= club.gear * d.strikeV * 30; // high on the face = less spin (woods)
+  spinRpm -= club.gear * d.strikeV * 22; // high on the face = less spin (woods)
   if (quality === 'thin') spinRpm *= 0.7;
   if (quality === 'topped') spinRpm = 200 + rng() * 300;
   if (club.kind === 'putter') spinRpm = 40;

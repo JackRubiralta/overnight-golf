@@ -29,7 +29,7 @@ export function scriptedSwing(clubId: string, o: { back?: number; tBack?: number
     const th = ang(t);
     const tx = S.x + Math.sin(th) * R + (o.jitter ? rnd() * o.jitter : 0);
     const ty = S.y - Math.cos(th) * R + (o.jitter ? rnd() * o.jitter : 0);
-    m.drag(tx - m.target.x, ty - m.target.y);
+    m.drag(tx - m.cursor.x, ty - m.cursor.y);
     const r = m.step(dt);
     if (r && !impact) impact = r;
     t += dt;
@@ -59,8 +59,8 @@ describe('swing model', () => {
     expect(half.clubSpeed).toBeLessThan(full.clubSpeed * 0.8);
   });
   it('swinging at the outer edge digs in (fat); swinging high thins it', () => {
-    const fat = scriptedSwing('7I', { radius: 1.06 }).impact!;
-    const thin = scriptedSwing('7I', { radius: 0.95 }).impact!;
+    const fat = scriptedSwing('7I', { radius: 1.25 }).impact!;
+    const thin = scriptedSwing('7I', { radius: 0.8 }).impact!;
     const ok = scriptedSwing('7I', { radius: 1.0 }).impact!;
     console.log('fatDepth', fat.fatDepth, 'thin sole', thin.soleHeight, 'ok sole', ok.soleHeight, ok.fatDepth);
     expect(fat.fatDepth).toBeGreaterThan(0.005);
