@@ -1,185 +1,153 @@
 /**
- * Terrain: chunked heightfield meshes with distance LOD + skirts, shaded by a splat material
- * driven by the baked SDF masks (fairway / green / fringe / rough / sand / tee / path / dirt).
- * (Baseline implementation — see Terrain shader upgrades in DECISIONS.md.)
+ * Terrain: GPU-displaced, instanced heightfield chunks with geomorphed LOD (see
+ * terrain/ChunkGrid.ts), shaded by a procedural splat material (terrain/terrainShader.ts)
+ * driven by the baked SDF masks: fairway with mowing stripes, first cut, green collar and
+ * cross-cut greens, tees, rough, deep rough with fescue, forest floor, rim forest/rock, raked
+ * sand, cart paths and lake beds.
+ *
+ * Cost: one draw call per LOD level (≤ 5) for the main pass + ≤ 2 for the sun shadow pass.
  */
 import * as THREE from 'three';
-import { COURSE_GLSL, courseUniforms, globalUniforms, type FrameContext, type InitContext, type QualityPreset, type RenderModule } from './shared';
+import { courseUniforms, globalUniforms, type FrameContext, type InitContext, type QualityPreset, type RenderModule } from './shared';
+import { ChunkSelector, LOD_STEPS, buildChunks, buildLevelGeometry, lodSwitchDistances, morphWindows, shadowCastingLevel } from './terrain/ChunkGrid';
+import { bakeSlopeTexture, buildMowData } from './terrain/TerrainData';
+import { TERRAIN_FRAGMENT_PARS, TERRAIN_NORMAL, TERRAIN_ROUGHNESS, TERRAIN_SPECULAR, TERRAIN_SURFACE, TERRAIN_VERTEX_PARS } from './terrain/terrainShader';
 
-const CHUNK_CELLS = 64; // cells per chunk side at LOD0 (64 * 1.25 m = 80 m)
+/** Shader detail level per quality preset (0 = cheapest). */
+const DETAIL_BY_QUALITY: Record<QualityPreset['level'], number> = { low: 0, medium: 1, high: 2, ultra: 2 };
+/** Chunks within this distance are kept even when off-screen (they may cast shadows into view). */
+const SHADOW_KEEP_MARGIN = 1.15;
+const PROGRAM_KEY = 'thornbury-terrain-v2';
 
 export class Terrain implements RenderModule {
   group = new THREE.Group();
+  /** LOD0 material (all levels share one program; they differ only by morph/step uniforms). */
   material!: THREE.MeshStandardMaterial;
-  private lods: THREE.LOD[] = [];
-  private bias = 1;
+  materials: THREE.MeshStandardMaterial[] = [];
+  /** RGBA16F: (dh/dx, dh/dz, small-scale curvature, large-scale curvature). Usable by other modules. */
+  slopeTexture!: THREE.DataTexture;
+  private depthMaterials: THREE.MeshDepthMaterial[] = [];
+  private meshes: THREE.InstancedMesh[] = [];
+  private selector!: ChunkSelector;
+  private levelUniforms: { uStep: THREE.IUniform<number>; uMorph: THREE.IUniform<THREE.Vector2> }[] = [];
+  private detail = 2;
+  private course: InitContext['course'] | null = null;
 
   init(ctx: InitContext) {
     const g = ctx.grids;
+    this.course = ctx.course;
     const cell = (2 * g.half) / (g.res - 1);
-    this.material = this.createMaterial(ctx);
-    const chunks = Math.ceil((g.res - 1) / CHUNK_CELLS);
-    for (let cj = 0; cj < chunks; cj++) {
-      for (let ci = 0; ci < chunks; ci++) {
-        const lod = new THREE.LOD();
-        const i0 = ci * CHUNK_CELLS;
-        const j0 = cj * CHUNK_CELLS;
-        const steps = [1, 2, 4, 8];
-        const dists = [0, 160, 380, 800];
-        steps.forEach((step, k) => {
-          const geo = buildChunk(g.heights, g.res, i0, j0, CHUNK_CELLS, step, cell, g.half);
-          const mesh = new THREE.Mesh(geo, this.material);
-          mesh.receiveShadow = true;
-          mesh.castShadow = k <= 1;
-          mesh.matrixAutoUpdate = false;
-          lod.addLevel(mesh, dists[k]);
-        });
-        lod.position.set(0, 0, 0);
-        lod.autoUpdate = true;
-        this.lods.push(lod);
-        this.group.add(lod);
-      }
-    }
+    this.slopeTexture = bakeSlopeTexture(g);
+    const mow = buildMowData();
+    const shared: Record<string, THREE.IUniform> = {
+      ...courseUniforms(ctx.textures),
+      uSlopeTex: { value: this.slopeTexture },
+      uCameraPos: globalUniforms.uCameraPos,
+      uWetness: globalUniforms.uWetness,
+      uFairSeg: { value: mow.fairwaySegs },
+      uFairCount: { value: mow.fairwayCount },
+      uGreens: { value: mow.greens },
+      uTees: { value: mow.tees },
+      uHoleCount: { value: mow.holeCount },
+    };
+    this.detail = DETAIL_BY_QUALITY[ctx.quality.level];
+
+    const chunks = buildChunks(g.heights, g.res, g.half);
+    this.group.name = 'terrain';
+    LOD_STEPS.forEach((step, k) => {
+      const lu = { uStep: { value: step }, uMorph: { value: new THREE.Vector2(1e9, 1e9 + 1) } };
+      this.levelUniforms.push(lu);
+      const mat = this.createMaterial({ ...shared, ...lu });
+      const depth = this.createDepthMaterial({ ...shared, ...lu });
+      this.materials.push(mat);
+      this.depthMaterials.push(depth);
+      const mesh = new THREE.InstancedMesh(buildLevelGeometry(step, cell), mat, chunks.length);
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      mesh.count = 0;
+      mesh.frustumCulled = false; // culled per chunk on the CPU
+      mesh.matrixAutoUpdate = false;
+      mesh.receiveShadow = true;
+      mesh.castShadow = shadowCastingLevel(k);
+      mesh.customDepthMaterial = depth;
+      mesh.raycast = () => {}; // use Course.height() / Course.normal() for queries
+      mesh.name = `terrain-lod${k}`;
+      this.meshes.push(mesh);
+      this.group.add(mesh);
+    });
+    this.material = this.materials[0];
+    this.selector = new ChunkSelector(chunks, this.meshes);
     ctx.scene.add(this.group);
     this.setQuality(ctx.quality);
+    // Select chunks once so the very first frame is complete.
+    ctx.camera.updateMatrixWorld();
+    this.selector.update(ctx.camera);
   }
 
   setQuality(q: QualityPreset) {
-    this.bias = q.terrainLodBias;
-    const dists = [0, 160, 380, 800].map((d) => d * this.bias);
-    for (const lod of this.lods) lod.levels.forEach((l, i) => (l.distance = dists[i]));
+    const sw = lodSwitchDistances(q.terrainLodBias);
+    const win = morphWindows(sw);
+    this.levelUniforms.forEach((u, k) => u.uMorph.value.copy(win[k]));
+    if (this.selector) {
+      this.selector.switchDist = sw;
+      this.selector.shadowKeep = q.shadowDistance * SHADOW_KEEP_MARGIN;
+    }
+    const detail = DETAIL_BY_QUALITY[q.level];
+    if (detail !== this.detail) {
+      this.detail = detail;
+      for (const m of this.materials) {
+        m.defines = { ...m.defines, TERRAIN_DETAIL: detail };
+        m.needsUpdate = true;
+      }
+    }
   }
 
-  update(_ctx: FrameContext) {
-    /* LOD auto-updates during render */
+  update(ctx: FrameContext) {
+    ctx.camera.updateMatrixWorld();
+    this.selector.update(ctx.camera);
   }
 
-  private createMaterial(ctx: InitContext) {
+  /** Rendered terrain height (identical to physics). */
+  heightAt(x: number, z: number): number {
+    return this.course ? this.course.height(x, z) : 0;
+  }
+
+  dispose() {
+    for (const m of this.meshes) m.geometry.dispose();
+    for (const m of this.materials) m.dispose();
+    for (const m of this.depthMaterials) m.dispose();
+    this.slopeTexture?.dispose();
+    this.group.removeFromParent();
+  }
+
+  private createMaterial(uniforms: Record<string, THREE.IUniform>) {
     const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0 });
-    const uniforms = { ...courseUniforms(ctx.textures), uTime: globalUniforms.uTime };
+    mat.defines = { TERRAIN_COLOR: '', TERRAIN_DETAIL: this.detail };
     mat.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, uniforms);
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vWorldPos;')
-        .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+        .replace('#include <common>', `#include <common>\n${TERRAIN_VERTEX_PARS}`)
+        .replace('#include <beginnormal_vertex>', 'vec3 tNrmW;\nvec3 tLocal = terrainDisplace(position, tNrmW);\nvec3 objectNormal = tNrmW;')
+        .replace('#include <begin_vertex>', 'vec3 transformed = tLocal;');
       shader.fragmentShader = shader.fragmentShader
-        .replace(
-          '#include <common>',
-          `#include <common>
-varying vec3 vWorldPos;
-${COURSE_GLSL}
-float th(float d, float w) { return 1.0 - smoothstep(-w, w, d); }
-float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
-float vnoise(vec2 p) { vec2 i = floor(p); vec2 f = fract(p); f = f*f*(3.0-2.0*f);
-  return mix(mix(hash12(i), hash12(i+vec2(1,0)), f.x), mix(hash12(i+vec2(0,1)), hash12(i+vec2(1,1)), f.x), f.y); }
-float fbm2(vec2 p) { float s = 0.0; float a = 0.5; for (int i = 0; i < 4; i++) { s += a * vnoise(p); p *= 2.03; a *= 0.5; } return s; }
-`,
-        )
-        .replace(
-          '#include <color_fragment>',
-          `#include <color_fragment>
-{
-  vec2 xz = vWorldPos.xz;
-  vec4 mA = courseMaskA(xz);
-  vec4 mBr = courseMaskBRaw(xz);
-  float teeD = (mBr.r * 255.0 - 128.0) / 16.0;
-  float pathD = (mBr.g * 255.0 - 128.0) / 16.0;
-  float corridor = mBr.b * 255.0 * 0.5;
-  float n1 = fbm2(xz * 0.35);
-  float n2 = fbm2(xz * 0.05);
-  float edgeN = (n1 - 0.5) * 0.35;
-  vec3 rough = mix(vec3(0.16, 0.24, 0.07), vec3(0.22, 0.28, 0.09), n2) * (0.8 + 0.4 * n1);
-  vec3 deep = mix(vec3(0.17, 0.2, 0.07), vec3(0.24, 0.24, 0.1), n2);
-  vec3 col = mix(rough, deep, smoothstep(20.0, 40.0, corridor));
-  // Fairway with mowing stripes (stripe along the dominant direction, 6 m bands).
-  float stripes = step(0.5, fract((xz.x * 0.7 + xz.y * 0.7) / 12.0));
-  vec3 fw = mix(vec3(0.24, 0.42, 0.1), vec3(0.3, 0.5, 0.13), stripes) * (0.92 + 0.12 * n1);
-  float fwM = th(mA.r + edgeN, 0.25);
-  col = mix(col, fw, fwM);
-  // Fringe & green
-  vec3 fringe = vec3(0.26, 0.45, 0.12) * (0.95 + 0.1 * n1);
-  col = mix(col, fringe, th(mA.g - 1.6 + edgeN, 0.2));
-  float gstr = step(0.5, fract((xz.x * 0.2 - xz.y * 0.98) / 3.0));
-  vec3 green = mix(vec3(0.28, 0.52, 0.14), vec3(0.32, 0.56, 0.16), gstr) * (0.96 + 0.06 * n1);
-  col = mix(col, green, th(mA.g, 0.12));
-  // Tee
-  col = mix(col, mix(vec3(0.27, 0.48, 0.13), vec3(0.31, 0.53, 0.15), stripes), th(teeD, 0.15));
-  // Path
-  col = mix(col, vec3(0.55, 0.53, 0.48) * (0.85 + 0.2 * n1), th(pathD, 0.15));
-  // Sand (with a darker wet rim)
-  vec3 sand = vec3(0.86, 0.78, 0.6) * (0.9 + 0.15 * n1);
-  col = mix(col, vec3(0.45, 0.4, 0.3), th(mA.b - 0.25, 0.15));
-  col = mix(col, sand, th(mA.b + 0.05 + edgeN * 0.5, 0.1));
-  // Lake bed / muddy banks
-  col = mix(col, vec3(0.28, 0.25, 0.17), th(mA.a - 1.5, 1.0));
-  diffuseColor.rgb = col;
-}`,
-        );
+        .replace('#include <common>', `#include <common>\n${TERRAIN_FRAGMENT_PARS}`)
+        .replace('#include <color_fragment>', `#include <color_fragment>\n${TERRAIN_SURFACE}`)
+        .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n${TERRAIN_ROUGHNESS}`)
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${TERRAIN_NORMAL}`)
+        .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>\n${TERRAIN_SPECULAR}`);
     };
+    mat.customProgramCacheKey = () => PROGRAM_KEY;
     return mat;
   }
-}
 
-/** Build one chunk mesh at a given step (LOD), with a skirt to hide LOD cracks. */
-function buildChunk(heights: Float32Array, res: number, i0: number, j0: number, cells: number, step: number, cell: number, half: number) {
-  const n = Math.floor(cells / step) + 1;
-  const verts = (n * n + 4 * n) * 3;
-  const pos = new Float32Array(verts);
-  const nrm = new Float32Array(verts);
-  const H = (i: number, j: number) => {
-    i = Math.max(0, Math.min(res - 1, i));
-    j = Math.max(0, Math.min(res - 1, j));
-    return heights[j * res + i];
-  };
-  let v = 0;
-  const put = (i: number, j: number, yOff: number) => {
-    const x = -half + i * cell;
-    const z = -half + j * cell;
-    pos[v * 3] = x;
-    pos[v * 3 + 1] = H(i, j) + yOff;
-    pos[v * 3 + 2] = z;
-    const hx = H(i + 1, j) - H(i - 1, j);
-    const hz = H(i, j + 1) - H(i, j - 1);
-    const l = Math.hypot(hx, 2 * cell, hz);
-    nrm[v * 3] = -hx / l;
-    nrm[v * 3 + 1] = (2 * cell) / l;
-    nrm[v * 3 + 2] = -hz / l;
-    v++;
-  };
-  for (let b = 0; b < n; b++) for (let a = 0; a < n; a++) put(i0 + a * step, j0 + b * step, 0);
-  const idx: number[] = [];
-  for (let b = 0; b < n - 1; b++) {
-    for (let a = 0; a < n - 1; a++) {
-      const p = b * n + a;
-      // Diagonal from (a, b+1) to (a+1, b) — matches Course.height() triangulation.
-      idx.push(p, p + n, p + 1, p + 1, p + n, p + n + 1);
-    }
+  private createDepthMaterial(uniforms: Record<string, THREE.IUniform>) {
+    const mat = new THREE.MeshDepthMaterial();
+    mat.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, uniforms);
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', `#include <common>\n${TERRAIN_VERTEX_PARS}`)
+        .replace('#include <begin_vertex>', 'vec3 tNrmW;\nvec3 transformed = terrainDisplace(position, tNrmW);');
+    };
+    mat.customProgramCacheKey = () => `${PROGRAM_KEY}-depth`;
+    return mat;
   }
-  // Skirts along the 4 edges.
-  const skirt = 1.5 * step;
-  const edges: [number, number][][] = [[], [], [], []];
-  for (let k = 0; k < n; k++) {
-    edges[0].push([k, 0]);
-    edges[1].push([n - 1, k]);
-    edges[2].push([n - 1 - k, n - 1]);
-    edges[3].push([0, n - 1 - k]);
-  }
-  for (const e of edges) {
-    const start = v;
-    for (const [a, b] of e) put(i0 + a * step, j0 + b * step, -skirt);
-    for (let k = 0; k < e.length - 1; k++) {
-      const top0 = e[k][1] * n + e[k][0];
-      const top1 = e[k + 1][1] * n + e[k + 1][0];
-      const bot0 = start + k;
-      const bot1 = start + k + 1;
-      idx.push(top0, bot0, top1, top1, bot0, bot1);
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos.subarray(0, v * 3), 3));
-  geo.setAttribute('normal', new THREE.BufferAttribute(nrm.subarray(0, v * 3), 3));
-  geo.setIndex(idx);
-  geo.computeBoundingSphere();
-  geo.computeBoundingBox();
-  return geo;
 }
