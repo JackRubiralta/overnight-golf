@@ -108,11 +108,11 @@ export const SWING = {
   /** Mouse → hand mapping (radians of arm swing per pixel at sensitivity 1). */
   mouseToArm: 0.0055,
   /** Hand following spring (critically-damped-ish). */
-  handStiffness: 260,
-  handDamping: 30,
+  handStiffness: 1600,
+  handDamping: 68,
   /** Wrist hinge: angular spring between forearm and shaft. */
-  wristStiffness: 38,
-  wristDamping: 2.2,
+  wristStiffness: 160,
+  wristDamping: 6,
   wristMaxHinge: 115 * DEG,
   /** How much hand speed transfers to clubhead via release (lag whip). */
   releaseGain: 1.0,
