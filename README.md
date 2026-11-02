@@ -2,7 +2,14 @@
 
 A hard, skill-based 3D golf game that runs in the browser. It is built with **Three.js, TypeScript and Vite**. You swing by physically dragging the golfer's hands with the mouse. The club has real weight, and the shot depends on your hand speed and path, your face and path settings, and how cleanly you strike the ball. It is an original game inspired by the mechanics of *Normal Golf Game*. See [CREDITS.md](CREDITS.md).
 
-![Tee shot at golden hour](screenshots/game_hole1_tee_low.png)
+![Tee shot at golden hour](screenshots/shot_golfer_address.png)
+
+More screenshots (all rendered in-engine, golden hour unless noted):
+
+| | | |
+|---|---|---|
+| ![Tee](screenshots/shot_tee.png) | ![Green](screenshots/shot_green.png) | ![Pond](screenshots/shot_water.png) |
+| ![Course overview](screenshots/shot_wide.png) | ![Rough grass](screenshots/shot_grass.png) | ![Dusk](screenshots/shot_dusk.png) |
 
 ## Play
 
