@@ -102,7 +102,7 @@ s = await g();
 check('Tab near the ball returns to stance', s.mode === 'stance', s.mode);
 
 // ── The swing: hold LMB and drag the hands around the arc. ──
-// Swing panel convention: mouse up/right = backswing, swiftly down/left = downswing.
+// Swing panel convention (target on the right): mouse up/left = backswing, swiftly down/right = downswing.
 const PX = 0.0021; // metres per pixel at sensitivity 1 (SwingController)
 const R = 0.62 / PX; // arm radius in pixels
 const start = { x: 640, y: 900 };
@@ -110,7 +110,7 @@ const centre = { x: start.x, y: start.y - R };
 const pos = (deg) => {
   const th = (deg * Math.PI) / 180;
   // Plane: x = sin(th) R, y = -cos(th) R. Screen: dx = -x, dy = +cos... (y down) → screen y = centre.y + cos(th) R.
-  return { x: centre.x - Math.sin(th) * R, y: centre.y + Math.cos(th) * R };
+  return { x: centre.x + Math.sin(th) * R, y: centre.y + Math.cos(th) * R };
 };
 await page.mouse.move(start.x, start.y);
 await page.mouse.down({ button: 'left' });

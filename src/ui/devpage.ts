@@ -164,7 +164,7 @@ function hudView(t: number, swing: SwingPanelView | null, time: number): HudView
     holeNumber: hole.number, holeName: hole.name, par: hole.par, strokes: 0, totalStrokes: 11, toPar: -1,
     distanceToPin: 152.4, elevationToPin: -6.1, lie: 'tee', windSpeed: 4.2, windRelAngle: 0.9 + 0.1 * Math.sin(time * 0.5),
     timer: 734 + time, club: BAG[2], bag: BAG, swing: walk ? null : swing, clubPanel: walk ? null : club,
-    hint: walk ? 'WASD walk · Shift run · F go to ball (42 yd) · RMB rangefinder · Ctrl crouch' : 'Hold LMB and drag up-right to swing · A/D face · Q/E path · Z/C aim · X practice',
+    hint: walk ? 'WASD walk · Shift run · F go to ball (42 yd) · RMB rangefinder · Ctrl crouch' : 'Hold LMB and drag up-left to swing · A/D face · Q/E path · Z/C aim · X practice',
     rangefinder: walk ? { distance: 138.2, elevation: -4.5 } : null, ballInFlight: false, distanceToBall: walk ? 38 : 0, units: 'yards',
     player: { x: hole.tee[0] + 2, z: hole.tee[1] - 8, yaw: Math.PI * 0.95 }, ball: { x: hole.tee[0] + 1, z: hole.tee[1] - 12 }, pin: { x: hole.pin[0], z: hole.pin[1] },
   };

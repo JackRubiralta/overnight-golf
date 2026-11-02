@@ -137,7 +137,11 @@ export class SwingController {
     return a === 'off' ? 1 : a === 'light' ? 0.45 : 0;
   }
 
-  /** Smooth, visible drift (sum of sines + seeded phase), only while swinging. */
+  /**
+   * Unstable "balance" drift while swinging: face and path wander, and once they are off square
+   * they keep accelerating AWAY from centre (like balancing a pole), so the player has to keep
+   * correcting with A/D and Q/E all through the swing. Off with assist 'full', halved on 'light'.
+   */
   private updateDrift(dt: number) {
     const k = this.assistScale();
     if (!this.active || k === 0) {
@@ -147,12 +151,21 @@ export class SwingController {
     }
     this.driftT += dt;
     const t = this.driftT + this.driftSeed;
-    // Amplitude grows a little with hand speed (fast hands = harder to hold the face square).
+    const putt = this.club.kind === 'putter' ? 0.4 : 1;
+    // Fast hands make the club harder to hold square.
     const hs = Math.hypot(this.model.handsVel.x, this.model.handsVel.y);
-    const amp = (1 + Math.min(1.2, hs / 8)) * k;
-    const putt = this.club.kind === 'putter' ? 0.35 : 1;
-    this.faceDrift = putt * amp * 2.0 * (0.6 * Math.sin(t * 2.1) + 0.4 * Math.sin(t * 4.7 + 1.3));
-    this.pathDrift = putt * amp * 1.5 * (0.55 * Math.sin(t * 1.6 + 2.2) + 0.45 * Math.sin(t * 3.9 + 0.4));
+    const speedAmp = 1 + Math.min(1, hs / 9);
+    // Smooth random push (deg/s) that starts the wander in a seeded direction…
+    const pushF = SWING.driftPush * speedAmp * (0.5 * Math.sin(t * 1.3) + 0.3 * Math.sin(t * 3.1 + 1.3) + 0.6 * Math.sign(Math.sin(this.driftSeed)));
+    const pushP = SWING.driftPush * 0.8 * speedAmp * (0.5 * Math.sin(t * 1.1 + 2.2) + 0.3 * Math.sin(t * 2.7 + 0.4) + 0.6 * Math.sign(Math.cos(this.driftSeed)));
+    // …and instability that amplifies whatever error there is (exponential run-away).
+    const effF = this.face + this.faceDrift;
+    const effP = this.path + this.pathDrift;
+    const inst = SWING.driftInstability * k * putt;
+    this.faceDrift += (inst * effF + pushF * k * putt) * dt;
+    this.pathDrift += (inst * effP + pushP * k * putt) * dt;
+    this.faceDrift = clamp(this.faceDrift, -SWING.maxFace, SWING.maxFace);
+    this.pathDrift = clamp(this.pathDrift, -SWING.maxPath, SWING.maxPath);
   }
 
   /**
@@ -188,13 +201,13 @@ export class SwingController {
     const uy = this.smoothDy * take;
     this.smoothDx -= ux;
     this.smoothDy -= uy;
-    // Face-on panel: target is on the screen's LEFT. Mouse right/up → hands back/up (backswing);
-    // swiftly down (and left) → downswing. The movement is spread evenly over the physics
+    // Face-on panel: target is on the screen's RIGHT. Mouse left/up → hands back/up (backswing);
+    // swiftly down (and right) → downswing. The movement is spread evenly over the physics
     // sub-steps of this frame so the hand target moves smoothly.
     let dragX = 0;
     let dragY = 0;
     if (grab) {
-      const sx = settings.get('invertSwingX') ? 1 : -1;
+      const sx = settings.get('invertSwingX') ? -1 : 1;
       const sy = settings.get('invertSwingY') ? 1 : -1;
       dragX = ux * sens * sx;
       dragY = uy * sens * sy;
@@ -324,12 +337,12 @@ export class SwingController {
 
   clubPanelView(): ClubPanelView {
     return {
-      face: this.face,
-      path: this.path,
+      face: this.face + this.faceDrift,
+      path: this.path + this.pathDrift,
       aim: this.aim,
       stance: this.stance,
-      faceDrift: this.faceDrift,
-      pathDrift: this.pathDrift,
+      faceDrift: -this.faceDrift,
+      pathDrift: -this.pathDrift,
       wobble: this.assistScale() > 0,
       startLine: settings.get('showStartLine') || settings.get('assist') !== 'off' ? this.predictedStart() : null,
     };

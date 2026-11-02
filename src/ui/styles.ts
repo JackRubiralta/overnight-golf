@@ -101,9 +101,9 @@ export const UI_CSS = /* css */ `
 .tl-bag div.sel sup { color: rgba(30,25,10,0.6); }
 
 /* Bottom corners: swing + club panels */
-.tl-swing { position: absolute; left: 1.4em; bottom: 1.3em; width: 20em; height: 20em; overflow: hidden; transition: opacity .3s, transform .3s; }
+.tl-swing { position: absolute; left: 1.4em; bottom: 1.3em; width: 28em; height: 28em; overflow: hidden; transition: opacity .3s, transform .3s; }
 .tl-swing canvas { width: 100%; height: 100%; display: block; }
-.tl-club { position: absolute; right: 1.4em; bottom: 1.3em; width: 17em; height: 19em; overflow: hidden; display: flex; flex-direction: column; transition: opacity .3s, transform .3s; }
+.tl-club { position: absolute; right: 1.4em; bottom: 1.3em; width: 24em; height: 27em; overflow: hidden; display: flex; flex-direction: column; transition: opacity .3s, transform .3s; }
 .tl-club canvas { flex: 1; width: 100%; min-height: 0; display: block; }
 .tl-cp-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--tl-line); border-top: 1px solid var(--tl-line); }
 .tl-cp-cell { background: rgba(10,14,12,0.55); padding: 0.35em 0.5em 0.4em; display: flex; flex-direction: column; gap: 0.1em; }
@@ -142,7 +142,7 @@ export const UI_CSS = /* css */ `
 .tl-intro .rule { width: 4em; height: 2px; background: linear-gradient(90deg, var(--tl-gold), transparent); margin: 0.6em 0; }
 
 /* Shot data card */
-.tl-shot { position: absolute; right: 1.4em; bottom: 21.6em; width: 21em; padding: 0.75em 0.85em 0.7em; transition: opacity .4s, transform .4s; }
+.tl-shot { position: absolute; right: 1.4em; bottom: 29.6em; width: 21em; padding: 0.75em 0.85em 0.7em; transition: opacity .4s, transform .4s; }
 .tl-shot.off { opacity: 0; transform: translateX(1.5em); }
 .tl-shot.noclub { bottom: 1.3em; }
 .tl-shot .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.55em; }

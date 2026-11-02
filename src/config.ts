@@ -90,8 +90,8 @@ export const SURFACES: Record<SurfaceId, SurfaceParams> = {
 /** Swing / player-control tuning. */
 export const SWING = {
   /** Degrees per second when holding a face key; Shift = fine. */
-  faceRate: 6,
-  pathRate: 6,
+  faceRate: 9,
+  pathRate: 9,
   aimRate: 30,
   fineFactor: 0.2,
   /** Discrete step (deg) applied on key tap, for precise adjustment. */
@@ -102,9 +102,9 @@ export const SWING = {
   /** Stance (ball position) range in normalized units [-1 (back) .. 1 (forward)]. */
   stanceRate: 1.2,
   stanceStep: 0.1,
-  /** Drift: random walk applied to face/path while the swing is in motion (deg/s, std). */
-  driftRate: 3.2,
-  driftMeanReversion: 0.15,
+  /** Drift while swinging: random push (deg/s) + instability (1/s) that drives face/path away from square. */
+  driftPush: 4.2,
+  driftInstability: 1.55,
   /** Mouse → hand mapping (radians of arm swing per pixel at sensitivity 1). */
   mouseToArm: 0.0055,
   /** Hand following spring (critically-damped-ish). */

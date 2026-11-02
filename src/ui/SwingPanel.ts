@@ -2,7 +2,8 @@
  * Swing panel (bottom-left): a face-on side view of the golfer drawn from SwingPanelView.
  *
  * Swing-plane coordinates are metres with +x toward the target, y up, ground at 0. The panel
- * draws the TARGET ON THE SCREEN'S LEFT, so +x maps to screen-left (mouse up/right = backswing).
+ * draws the TARGET ON THE SCREEN'S RIGHT, so +x maps to screen-right (mouse up/left = backswing,
+ * swiftly down/right = downswing).
  * Layers (back to front): ground, sweet ring band, arm circle, ghost hand path, current hand path,
  * clubhead speed trail (coloured by speed band), mannequin + club, ball, virtual cursor, readouts.
  */
@@ -106,7 +107,7 @@ export class SwingPanel {
     const k = this.scale;
     const ox = w / 2;
     const oy = h - PAD_PX - 4 + bottom * k;
-    const X = (x: number) => ox - (x - S.x) * k; // +x (target) → screen left
+    const X = (x: number) => ox + (x - S.x) * k; // +x (target) → screen right
     const Y = (y: number) => oy - y * k;
     const P = (p: Vec2): [number, number] => [X(p.x), Y(p.y)];
 
@@ -127,9 +128,9 @@ export class SwingPanel {
     // Target direction label.
     ctx.font = cfont(600, 9, u);
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.textAlign = 'left';
+    ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    ctx.fillText('◀ TARGET', 9, 14 * u);
+    ctx.fillText('TARGET ▶', w - 9, 14 * u);
 
     // Sweet ring (cursor radius band for clean contact).
     const [sx, sy] = P(S);
@@ -412,17 +413,17 @@ export class SwingPanel {
     const bands = v.speedBands;
     const cur = BAND_COL[speedBandIndex(v.speedMph, bands)];
     // Speed number (top-right).
-    ctx.textAlign = 'right';
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.font = cfont(700, 20, u);
     ctx.fillStyle = v.speedMph > TRAIL_MIN_MPH ? cur : 'rgba(255,255,255,0.75)';
-    ctx.fillText(speedFromMph(v.speedMph, this.units), w - 10, 26 * u);
+    ctx.fillText(speedFromMph(v.speedMph, this.units), 10, 26 * u);
     ctx.font = cfont(600, 9, u);
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillText(`CLUBHEAD ${speedUnit(this.units).toUpperCase()}`, w - 10, 38 * u);
+    ctx.fillText(`CLUBHEAD ${speedUnit(this.units).toUpperCase()}`, 10, 38 * u);
     if (this.peakMph > 0) {
       ctx.fillStyle = BAND_COL[speedBandIndex(this.peakMph, bands)];
-      ctx.fillText(`PEAK ${speedFromMph(this.peakMph, this.units)}`, w - 10, 50 * u);
+      ctx.fillText(`PEAK ${speedFromMph(this.peakMph, this.units)}`, 10, 50 * u);
     }
     if (v.practice) {
       ctx.textAlign = 'left';
@@ -430,10 +431,11 @@ export class SwingPanel {
       const label = 'PRACTICE SWING';
       const tw = ctx.measureText(label).width;
       ctx.fillStyle = 'rgba(255,209,102,0.18)';
-      roundRect(ctx, 8, 22 * u, tw + 12 * u, 16 * u, 8 * u);
+      const bx = w - 8 - tw - 12 * u;
+      roundRect(ctx, bx, 22 * u, tw + 12 * u, 16 * u, 8 * u);
       ctx.fill();
       ctx.fillStyle = '#ffd166';
-      ctx.fillText(label, 8 + 6 * u, 33.5 * u);
+      ctx.fillText(label, bx + 6 * u, 33.5 * u);
     }
     // Speed meter strip along the bottom: zones by speed band, marker at current/peak.
     const mx = 10;

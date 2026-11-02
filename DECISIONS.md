@@ -36,7 +36,7 @@ Decisions made autonomously during the overnight build, with the reasoning. Newe
   - 1–5 clubs: an official option, which we make the default.
 - **W/S = stance (ball position) in address.** This is an ASSUMPTION. No source names the key, so we use the user's mapping.
 - **Direction conventions:** A = close the face, D = open it. Q = in-to-out (draw), E = out-to-in (fade). The direction is fan-sourced, but it is the natural "A/Q left, D/E right" mapping.
-- **Mouse swing:** the swing panel is a face-on view with the target on the screen's left. Drag up/right for the backswing, then swiftly down (and left) through the ball. One review describes this as "swiftly move the mouse downward to hit the ball". Both axes can be inverted in settings.
+- **Mouse swing:** the swing panel is a face-on view with the target on the screen's **right** (mirrored at the user's request). Drag up/left for the backswing, then swiftly down (and right) through the ball. One review describes this as "swiftly move the mouse downward to hit the ball". Both axes can be inverted in settings.
 - **Pointer lock while LMB is held.** The original probably isn't pointer-locked, but the brief asks for it so the swing isn't limited by the screen edge. A virtual cursor is drawn in the swing panel.
 - **Stance forward = body forward = ball further back**, which gives a delofted, low punch. Stance back gives higher, scooped shots. This matches the community description "forward → lower stinger".
 

@@ -22,7 +22,7 @@ The defaults follow the controls of the game that inspired this one; RESEARCH.md
 | Input | Action |
 |---|---|
 | **Hold LMB + drag** | Grab the golfer's **hands** and swing. The mouse is pointer-locked while you hold the button, so the screen edge never stops your swing. |
-| | Drag **up/right** for the backswing, then swiftly **down/left** through the ball. The club has weight: it lags, cocks and whips through on its own. |
+| | Drag **up/left** for the backswing, then swiftly **down/right** through the ball (the target is on the right of the swing panel). The club has weight: it lags, cocks and whips through on its own. |
 | | **Speed** and **smoothness** set clubhead speed. Jerky, erratic movement causes toe/heel strikes. Hands that move too fast make the face flail. |
 | | **How far out you swing** sets contact. Stay on the ring drawn in the swing panel. Reaching past it digs the club into the turf (fat). Staying inside it hits thin or topped, or misses completely. |
 | **A / D** | Close / open the **clubface**. This mainly sets where the ball **starts**. Works *during* the swing. |

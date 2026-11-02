@@ -72,8 +72,8 @@ function swingShot(opts: { club?: number; faceTaps?: number; pathTaps?: number; 
     }
     const tx = S.x + Math.sin(th) * R;
     const ty = S.y - Math.cos(th) * R;
-    // SwingController maps mouse right → -x, mouse down (+dy) → -y.
-    input.dx += -(tx - prev.x) / PX;
+    // SwingController maps mouse right → +x (toward target), mouse down (+dy) → -y.
+    input.dx += (tx - prev.x) / PX;
     input.dy += -(ty - prev.y) / PX;
     prev = { x: tx, y: ty };
     res = sc.update(input as never, dt);
