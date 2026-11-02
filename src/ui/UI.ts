@@ -610,7 +610,10 @@ export class UI {
         this.audio.ui('click');
         this.handlers.onNextHole();
       },
-      onClose: () => this.hideScorecard(),
+      onClose: () => {
+        this.hideScorecard();
+        this.handlers.onCloseScorecard?.();
+      },
     });
     this.scorecardEl = h('div', { class: 'tl-screen tl-modal-wrap' }, el);
     this.screens.append(this.scorecardEl);

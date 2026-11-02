@@ -147,4 +147,6 @@ export interface UIHandlers {
   onQuitToTitle(): void;
   onRestartHole(): void;
   onNextHole(): void;
+  /** The mid-round scorecard was closed from the UI (button/click). */
+  onCloseScorecard?(): void;
 }

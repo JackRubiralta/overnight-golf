@@ -42,6 +42,7 @@ async function boot() {
     onQuitToTitle: () => handlers.target?.onQuitToTitle(),
     onRestartHole: () => handlers.target?.onRestartHole(),
     onNextHole: () => handlers.target?.onNextHole(),
+    onCloseScorecard: () => handlers.target?.onCloseScorecard?.(),
   };
   const ui = new UI(document.getElementById('ui-root')!, proxy, input, audio);
   ui.setLoading(0.02, 'Shaping the landscape…');

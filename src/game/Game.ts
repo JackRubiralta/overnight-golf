@@ -84,6 +84,9 @@ export class Game {
       onQuitToTitle: () => this.toTitle(),
       onRestartHole: () => this.startHole(this.round.current, true),
       onNextHole: () => this.nextHole(),
+      onCloseScorecard: () => {
+        if (this.mode === 'scorecard') this.mode = this.prevMode;
+      },
     };
     this.rig = new CameraRig(world.camera, course);
     this.rig.baseFov = settings.get('fov');
@@ -98,6 +101,10 @@ export class Game {
       wind: (p, out) => this.wind.at(p, course.height(p.x, p.z), out),
     });
     this.swing.onAdjust = (k) => this.audio.adjust(k);
+    // Small/costly objects stay out of the planar water reflection.
+    mods.golfer.root.userData.noReflect = true;
+    mods.props.ball.userData.noReflect = true;
+    (mods.golfer as { setTrail?: (on: boolean) => void }).setTrail?.(true);
     mods.props.onPropHit = (e) => {
       this.audio.propHit(e.kind, e.speed);
       if (e.kind === 'gong' || e.kind === 'target') this.ui.toast(e.kind === 'gong' ? 'GONG!' : 'Target hit!', 'good');
@@ -148,7 +155,7 @@ export class Game {
     const h = HOLES[i];
     this.mods.props.setActiveHole(i);
     this.mods.props.setFlagOut(false);
-    this.mods.effects.clearTracers();
+    (this.mods.effects as { clearAll?: () => void }).clearAll?.() ?? this.mods.effects.clearTracers();
     this.wind.reroll();
     this.history = [];
     // Tee the ball up at the front-centre of the tee box.
@@ -601,7 +608,7 @@ export class Game {
     this.round.addPenalty(1);
     this.placeBall(last.ball);
     this.prevBall.copy(last.ball);
-    this.mods.effects.clearTracers();
+    (this.mods.effects as { clearAll?: () => void }).clearAll?.() ?? this.mods.effects.clearTracers();
     this.ui.toast('Retake — stroke and distance (+1)', 'info');
     this.suggestPending = false;
     this.enterStance();
