@@ -66,18 +66,22 @@ async function boot() {
   const game = new Game(world, mods, course, { input, audio, ui, handlers });
   phase('game ctor');
   window.__stats = () => world.stats();
-  // Warm-up frame so shaders compile behind the loading screen.
   game.toTitle();
-  phase('toTitle');
-  world.renderer.compile(world.scene, world.camera);
+  // ?play=N: start the round now so the shader warm-up and the warm-up frame see the real first
+  // view (no extra full cloud-cube refresh for a title camera that is never shown).
+  const autostart = params.get('play');
+  if (autostart !== null) game.startRound(Number(autostart) || 0, 'round');
+  phase('toTitle / startRound');
+  ui.setLoading(0.97, 'Mixing the paint…');
+  // Compile every material behind the loading screen (parallel where the driver allows it) …
+  await world.compileShaders();
   gpuSync(world.renderer.getContext());
-  phase('compile');
+  phase('compile shaders');
+  // … then one real frame: shadow-depth/post programs, cloud cube, first GPU uploads.
   game.update(1 / 60);
   gpuSync(world.renderer.getContext());
   phase('warm-up frame');
   ui.hideLoading();
-  const autostart = params.get('play');
-  if (autostart !== null) game.startRound(Number(autostart) || 0, 'round');
   let last = performance.now();
   const loop = () => {
     const now = performance.now();

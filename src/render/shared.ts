@@ -81,6 +81,12 @@ export interface FrameContext {
 export interface RenderModule {
   /** Short label for perf accounting (World.stats().passes); defaults to the class name. */
   readonly perfName?: string;
+  /**
+   * Optional, called before init() while the course bake runs in the workers (perf: the main
+   * thread is otherwise idle then). Build course-independent resources here (procedural
+   * textures, template geometry, WASM). init() must still work when prepare() was not called.
+   */
+  prepare?(renderer: THREE.WebGLRenderer): void | Promise<void>;
   /** Called once after the course is baked and the scene exists. */
   init?(ctx: InitContext): void | Promise<void>;
   update?(ctx: FrameContext): void;

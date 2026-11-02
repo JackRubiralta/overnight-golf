@@ -112,6 +112,21 @@ export class Foliage implements RenderModule {
   private impFrames: ReturnType<typeof impostorFrame>[] = [];
   private disposables: { dispose(): void }[] = [];
 
+  private prepared: { leafAtlas: THREE.Texture; flowerAtlas: THREE.Texture; bark: Record<BarkKind, BarkTextures>; variants: Variant[] } | null = null;
+
+  /** Course-independent work while the course bakes (perf): canvas textures + tree geometry. */
+  prepare() {
+    if (this.prepared) return;
+    const leafAtlas = createLeafAtlas();
+    const flowerAtlas = createFlowerAtlas();
+    const bark: Record<BarkKind, BarkTextures> = { oak: createBarkTextures('oak', 3), birch: createBarkTextures('birch', 5), pine: createBarkTextures('pine', 7) };
+    const variants = SPECIES.map((def) => {
+      const sk = generateSkeleton(def);
+      return { sk, lod0: buildTreeMesh(sk, 0), lod1: buildTreeMesh(sk, 1), sway: def.kind === 'bush' ? 0.05 : sk.height * 0.03 };
+    });
+    this.prepared = { leafAtlas, flowerAtlas, bark, variants };
+  }
+
   init(ctx: InitContext) {
     const t0 = performance.now();
     this.quality = ctx.quality;
@@ -126,22 +141,14 @@ export class Foliage implements RenderModule {
       marks.push(`${name} ${(now - tm).toFixed(0)}`);
       tm = now;
     };
-    // ---- textures
-    const leafAtlas = createLeafAtlas();
-    const flowerAtlas = createFlowerAtlas();
-    const bark: Record<BarkKind, BarkTextures> = { oak: createBarkTextures('oak', 3), birch: createBarkTextures('birch', 5), pine: createBarkTextures('pine', 7) };
+    // ---- textures + species geometry (normally built by prepare() while the course baked)
+    this.prepare();
+    const { leafAtlas, flowerAtlas, bark, variants } = this.prepared!;
+    this.prepared = null;
     this.disposables.push(leafAtlas, flowerAtlas, ...Object.values(bark).flatMap((b) => [b.map, b.normalMap]));
-
-    mark('textures');
-    // ---- species geometry
-    this.variants = SPECIES.map((def) => {
-      const sk = generateSkeleton(def);
-      const v = { sk, lod0: buildTreeMesh(sk, 0), lod1: buildTreeMesh(sk, 1), sway: def.kind === 'bush' ? 0.05 : sk.height * 0.03 };
-      this.disposables.push(v.lod0.bark, v.lod0.leaves, v.lod1.bark, v.lod1.leaves);
-      return v;
-    });
-
-    mark('geometry');
+    this.variants = variants;
+    for (const v of variants) this.disposables.push(v.lod0.bark, v.lod0.leaves, v.lod1.bark, v.lod1.leaves);
+    mark('textures+geometry');
     // ---- impostor atlas (one row per variant)
     const baked = bakeImpostors(
       ctx.renderer,

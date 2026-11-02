@@ -23,7 +23,7 @@ import { globalUniforms, type FrameContext, type InitContext, type QualityPreset
 import { BallVisual } from './props/ball';
 import { GeoBucket } from './props/builder';
 import { buildClubhouse } from './props/clubhouse';
-import { DynamicProps } from './props/dynamic';
+import { DynamicProps, preloadRapier } from './props/dynamic';
 import { FlagSet, PIN_HEIGHT, PIN_RADIUS, type PinSpec } from './props/flags';
 import { Frame, yawToward, type AddCollider, type Cluster, type PrimInit } from './props/frame';
 import { bench, cart, fenceChunks, holeSign, teeClusters } from './props/furniture';
@@ -82,12 +82,21 @@ export class Props implements RenderModule, CollisionWorld {
   physicsReady: Promise<void> = Promise.resolve();
   private scene: THREE.Scene | null = null;
 
+  private prepared: ReturnType<typeof createPropMaterials> | null = null;
+
+  /** Course-independent work while the course bakes (perf): procedural textures + Rapier WASM. */
+  prepare() {
+    this.prepared ??= createPropMaterials();
+    preloadRapier();
+  }
+
   init(ctx: InitContext) {
     const course = ctx.course;
     this.scene = ctx.scene;
     this.root.name = 'props';
     ctx.scene.add(this.root);
-    const { mats, tex, dispose } = createPropMaterials();
+    const { mats, tex, dispose } = this.prepared ?? createPropMaterials();
+    this.prepared = null;
     this.mats = mats;
     this.disposeMats = dispose;
     const col: AddCollider = (p: PrimInit) => {

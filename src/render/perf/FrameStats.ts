@@ -47,6 +47,8 @@ export interface FrameStatsSnapshot {
   fps: number;
   /** Most expensive objects of the last frame (only with ?perfobjects). */
   objects?: ObjectCost[];
+  /** Compiled programs (name, users, cache-key prefix; only with ?perfobjects). */
+  programList?: string[];
 }
 
 export class FrameStats {
@@ -183,7 +185,12 @@ export class FrameStats {
       cpuMs: this.cpuMs,
       frameMs: this.frameMs,
       fps: this.fps,
-      ...(RECORD_OBJECTS ? { objects: this.lastObjects.map((o) => ({ ...o })) } : {}),
+      ...(RECORD_OBJECTS
+        ? {
+            objects: this.lastObjects.map((o) => ({ ...o })),
+            programList: (i.programs ?? []).map((p) => `${p.name} ×${(p as unknown as { usedTimes: number }).usedTimes} ${String((p as unknown as { cacheKey: string }).cacheKey).slice(0, 80)}`),
+          }
+        : {}),
     };
   }
 }

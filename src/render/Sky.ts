@@ -69,11 +69,16 @@ export class SkySystem implements RenderModule {
   private unsub: (() => void) | null = null;
   private envDirty = false;
 
+  /** Course-independent work while the course bakes (perf): the CPU-generated cloud noise. */
+  prepare() {
+    this.noise ??= createCloudNoiseTexture(256);
+    this.detail ??= createDetailNoise3D(64);
+  }
+
   init(ctx: InitContext) {
     this.ctx = ctx;
     this.quality = ctx.quality;
-    this.noise = createCloudNoiseTexture(256);
-    this.detail = createDetailNoise3D(64);
+    this.prepare();
     this.cloudUniforms = createCloudUniforms(this.noise, this.detail);
     this.cloudCube = new CloudCube(this.cloudUniforms, CLOUD_CUBE_SIZE[ctx.quality.level], ctx.quality.cloudSteps * CLOUD_STEP_SCALE);
     this.uniforms = createSkyUniforms(this.cloudCube.texture);

@@ -79,6 +79,25 @@ export class World {
     this.resize();
   }
 
+  /**
+   * Run every module's optional prepare() (course-independent work) — call it while the course
+   * bake runs in the workers. Yields between modules so worker results and the loading bar
+   * are processed.
+   */
+  async prepare(modules: RenderModule[]) {
+    for (const m of modules) {
+      if (!m.prepare) continue;
+      markStart();
+      try {
+        await m.prepare(this.renderer);
+      } catch (e) {
+        console.error('Render module prepare failed', m, e);
+      }
+      phase(`prepare ${moduleName(m)}`);
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+
   /** Called once the course is baked. Initializes every registered module. */
   async init(course: Course, grids: CourseGrids, modules: RenderModule[], post: PostPipeline | null) {
     this.course = course;
@@ -106,7 +125,7 @@ export class World {
         console.error('Render module init failed', m, e);
       }
       gpuSync(this.renderer.getContext());
-      phase(`init ${m.constructor.name}`);
+      phase(`init ${moduleName(m)}`);
     }
     if (post) {
       markStart();
@@ -119,6 +138,30 @@ export class World {
       }
     }
     this.resize();
+  }
+
+  /**
+   * Compile every material in the scene before the first frame, in parallel where the driver
+   * supports KHR_parallel_shader_compile (the loading screen stays responsive meanwhile).
+   * Programs are compiled for the render-target colour space the frame will really use (the
+   * post chain renders the scene into a linear HalfFloat target; compiling against the canvas
+   * would build sRGB variants that are never used and double the program count).
+   * Shadow-depth and post-processing programs still compile on the first (warm-up) frame.
+   */
+  async compileShaders(): Promise<void> {
+    const r = this.renderer;
+    const prev = r.getRenderTarget();
+    const rt = this.post ? new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, depthBuffer: true }) : null;
+    this.camera.updateMatrixWorld();
+    r.setRenderTarget(rt);
+    let p: Promise<unknown>;
+    try {
+      p = r.compileAsync(this.scene, this.camera);
+    } finally {
+      r.setRenderTarget(prev);
+    }
+    await p;
+    rt?.dispose();
   }
 
   addModule(m: RenderModule) {

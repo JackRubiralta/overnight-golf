@@ -138,6 +138,18 @@ const ZERO_M = new THREE.Matrix4().makeScale(0, 0, 0);
 const SITE_PAD = 3;
 let _siteVis = new Uint8Array(16);
 
+let rapierPromise: Promise<Rapier> | null = null;
+/** Load + instantiate the Rapier WASM once (started early, while the course bakes — perf). */
+export function preloadRapier(): Promise<Rapier> {
+  rapierPromise ??= (async () => {
+    const mod = await import('@dimforge/rapier3d-compat');
+    const R = (mod.default ?? mod) as Rapier;
+    await R.init();
+    return R;
+  })();
+  return rapierPromise;
+}
+
 /** Merge per-material parts of a bucket into one grouped geometry for an InstancedMesh. */
 function multiGeo(b: GeoBucket, keys: string[], mats: PropMaterials) {
   const geos: THREE.BufferGeometry[] = [];
@@ -662,9 +674,7 @@ export class DynamicProps {
 
   /** Initialise Rapier and create bodies, joints and terrain patches. Safe to call once. */
   async initPhysics() {
-    const mod = await import('@dimforge/rapier3d-compat');
-    const R = (mod.default ?? mod) as Rapier;
-    await R.init();
+    const R = await preloadRapier();
     this.R = R;
     const world = new R.World({ x: 0, y: -PHYS.gravity, z: 0 });
     world.timestep = STEP;
