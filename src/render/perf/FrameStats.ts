@@ -169,7 +169,7 @@ export class FrameStats {
   end() {
     this.cpuMs = performance.now() - this.frameStart;
     this.last = this.passes;
-    if (RECORD_OBJECTS) this.lastObjects = [...this.objects.values()].sort((a, b) => b.triangles - a.triangles).slice(0, 60);
+    if (RECORD_OBJECTS) this.lastObjects = [...this.objects.values()].sort((a, b) => b.triangles - a.triangles).slice(0, 300);
     const r = this.renderer.info.render;
     this.lastTotals = { calls: r.calls, triangles: r.triangles, points: r.points, lines: r.lines };
   }

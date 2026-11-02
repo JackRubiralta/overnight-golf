@@ -8,7 +8,8 @@ import type { CourseGrids } from '../course/CourseField';
 import { settings } from '../core/settings';
 import { phase, markStart, gpuSync, PERF_SYNC } from './perf/timing';
 import { FrameStats, type FrameStatsSnapshot } from './perf/FrameStats';
-import { QUALITY, createCourseTextures, globalUniforms, type CourseTextures, type FrameContext, type InitContext, type QualityPreset, type RenderModule } from './shared';
+import { PerfHud } from './perf/PerfHud';
+import { PERF_BUDGETS, QUALITY, createCourseTextures, globalUniforms, type CourseTextures, type FrameContext, type InitContext, type QualityPreset, type RenderModule } from './shared';
 
 export interface PostPipeline {
   init(ctx: InitContext): void | Promise<void>;
@@ -40,6 +41,8 @@ export class World {
   /** Per-frame, per-pass renderer accounting (see perf/FrameStats.ts). */
   readonly perf: FrameStats;
   private moduleNames: string[] = [];
+  /** F3 perf overlay (created on first use). */
+  private hud: PerfHud | null = null;
 
   constructor(canvasParent: HTMLElement) {
     this.quality = QUALITY[settings.get('quality')];
@@ -68,6 +71,12 @@ export class World {
     this.applyShadowQuality();
 
     window.addEventListener('resize', () => this.resize());
+    window.addEventListener('keydown', (e) => {
+      if (e.code !== 'F3' || e.repeat) return;
+      e.preventDefault(); // F3 = "find next" in some browsers
+      this.togglePerfHud();
+    });
+    if (new URLSearchParams(location.search).has('perf')) this.togglePerfHud(true);
     settings.subscribe((s, changed) => {
       if (changed.includes('quality')) this.setQuality(QUALITY[s.quality]);
       if (changed.includes('renderScale')) this.resize();
@@ -138,6 +147,12 @@ export class World {
       }
     }
     this.resize();
+  }
+
+  /** Show/hide the perf overlay (F3). */
+  togglePerfHud(on?: boolean) {
+    this.hud ??= new PerfHud();
+    this.hud.toggle(on);
   }
 
   /**
@@ -266,6 +281,7 @@ export class World {
     if (this.post) this.post.render(ctx);
     else this.renderer.render(this.scene, this.camera);
     perf.end();
+    if (this.hud?.visible) this.hud.frame(perf.frameMs, () => this.stats(), PERF_BUDGETS[this.quality.level]);
   }
 
   /**

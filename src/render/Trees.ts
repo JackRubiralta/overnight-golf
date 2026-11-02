@@ -112,7 +112,7 @@ export class Foliage implements RenderModule {
   private impFrames: ReturnType<typeof impostorFrame>[] = [];
   private disposables: { dispose(): void }[] = [];
 
-  private prepared: { leafAtlas: THREE.Texture; flowerAtlas: THREE.Texture; bark: Record<BarkKind, BarkTextures>; variants: Variant[] } | null = null;
+  private prepared: { leafAtlas: ReturnType<typeof createLeafAtlas>; flowerAtlas: ReturnType<typeof createFlowerAtlas>; bark: Record<BarkKind, BarkTextures>; variants: Variant[] } | null = null;
 
   /** Course-independent work while the course bakes (perf): canvas textures + tree geometry. */
   prepare() {

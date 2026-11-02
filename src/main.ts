@@ -51,13 +51,23 @@ async function boot() {
   ui.setLoading(0.02, 'Shaping the landscape…');
   phase('world/input/audio/ui ctor');
   const field = new CourseField();
-  const grids = await bakeCourse(field, (p) => ui.setLoading(0.05 + p * 0.6, 'Shaping the landscape…'));
-  const course = new Course(field, grids);
-  phase('course bake');
-  ui.setLoading(0.7, 'Growing grass and trees…');
-  await new Promise((r) => setTimeout(r, 0));
+  // The bake runs in Web Workers; meanwhile the main thread prepares course-independent
+  // resources (procedural textures, tree geometry, Rapier WASM) instead of idling.
+  const bakeStart = performance.now();
+  let bakeMs = 0;
+  const baking = bakeCourse(field, (p) => ui.setLoading(0.05 + p * 0.6, 'Shaping the landscape…')).then((g) => {
+    bakeMs = performance.now() - bakeStart;
+    return g;
+  });
   const mods = createModules();
   const { list, post } = enabledModules(mods);
+  await world.prepare(list);
+  phase('prepare (overlaps the bake)');
+  const grids = await baking;
+  const course = new Course(field, grids);
+  phase(`course bake done (bake took ${bakeMs.toFixed(0)} ms)`);
+  ui.setLoading(0.7, 'Growing grass and trees…');
+  await new Promise((r) => setTimeout(r, 0));
   await world.init(course, grids, list, post);
   mods.props.setTreeColliders(mods.foliage.colliders);
   (mods.foliage as { onCollidersChanged?: ((c: typeof mods.foliage.colliders) => void) | null }).onCollidersChanged = (c) => mods.props.setTreeColliders(c);

@@ -51,6 +51,8 @@ const NO_REFLECT_NAMES = new Set(['grass', 'rain', 'fx']);
  * Dev-only camera hook (`?watercam=1|2|3`): frames the hole-3 mere for visual checks
  * (1 = elevated into the sun, 2 = low grazing into the sun, 3 = looking down-sun).
  */
+const _v = new THREE.Vector3();
+
 const WATER_CAM = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('watercam') : null;
 
 export interface WaterBody {
@@ -59,7 +61,18 @@ export interface WaterBody {
   level: number;
   /** Bounding sphere of the body's surface (for culling / reflection selection). */
   sphere: THREE.Sphere;
+  /** Tight bounds of the kept surface cells. */
+  box: THREE.Box3;
+  /** Evenly spread surface points (x, z pairs) for the reflection visibility test. */
+  samples: Float32Array;
 }
+
+/** Max surface sample points per body for the line-of-sight test. */
+const VIS_SAMPLES = 40;
+/** Ray-march step (m) of the terrain line-of-sight test. */
+const VIS_STEP = 2.5;
+/** Keep the planar reflection this many frames after its body was last seen (hysteresis). */
+const VIS_HOLD = 8;
 
 export class WaterSystem implements RenderModule {
   readonly perfName = 'water';
@@ -73,12 +86,22 @@ export class WaterSystem implements RenderModule {
   private frustum = new THREE.Frustum();
   private projView = new THREE.Matrix4();
   private hiddenTmp: THREE.Object3D[] = [];
+  private lastBody: WaterBody | null = null;
+  private holdFrames = 0;
+  private visCheckSkip = 0;
+  /** Whether the planar reflection was rendered this frame (perf HUD). */
+  reflecting = false;
+
+  /** Course-independent work while the course bakes (perf): the ripple normal texture. */
+  prepare() {
+    this.ripples ??= createWaterNormalTexture();
+  }
 
   init(ctx: InitContext) {
     this.quality = ctx.quality;
     const geo = this.buildGeometry(ctx);
     if (!geo) return;
-    this.ripples = createWaterNormalTexture();
+    this.prepare();
     this.material = this.createMaterial(ctx);
     const mesh = new THREE.Mesh(geo, this.material);
     mesh.name = 'water';
@@ -132,6 +155,7 @@ export class WaterSystem implements RenderModule {
         };
         let any = false;
         let sx = 0, sz = 0, cnt = 0;
+        const cells: number[] = [];
         for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
           const b = (ii: number, jj: number) => below[jj * (nx + 1) + ii];
           // Keep the cell if it or a neighbour corner is wet (1-cell dilation hides grid edges).
@@ -145,11 +169,26 @@ export class WaterSystem implements RenderModule {
           idx.push(a, d, c, c, d, e);
           any = true;
           sx += i; sz += j; cnt++;
+          // truly wet cells only (not the dilation ring) as visibility samples
+          if (b(i, j) && b(i + 1, j + 1)) cells.push(minX + (i + 0.5) * CELL, minZ + (j + 0.5) * CELL);
         }
         if (!any) return;
         const cx = minX + (sx / cnt) * CELL, cz = minZ + (sz / cnt) * CELL;
         const rad = Math.hypot(maxX - minX, maxZ - minZ) * 0.5;
-        this.bodies.push({ hole: hi, index: k, level, sphere: new THREE.Sphere(new THREE.Vector3(cx, level, cz), rad) });
+        const box = new THREE.Box3();
+        for (let q = 0; q < cells.length; q += 2) box.expandByPoint(_v.set(cells[q], level, cells[q + 1]));
+        box.expandByScalar(CELL * 2);
+        const nCells = cells.length / 2;
+        const take = Math.min(VIS_SAMPLES, nCells);
+        const samples = new Float32Array(take * 2);
+        // golden-ratio stride → points spread over the whole body
+        for (let q = 0; q < take; q++) {
+          const c = Math.floor(((q * 0.6180339887) % 1) * nCells);
+          samples[q * 2] = cells[c * 2];
+          samples[q * 2 + 1] = cells[c * 2 + 1];
+        }
+        if (!take) box.setFromCenterAndSize(new THREE.Vector3(cx, level, cz), new THREE.Vector3(rad * 2, 1, rad * 2));
+        this.bodies.push({ hole: hi, index: k, level, sphere: new THREE.Sphere(new THREE.Vector3(cx, level, cz), rad), box, samples });
       });
     });
     if (!idx.length) return null;
@@ -215,28 +254,80 @@ export class WaterSystem implements RenderModule {
     if (!q.waterReflections) this.reflection.target.setSize(16, 16); // free the big target
   }
 
-  /** Nearest water body in the view frustum (or null). */
-  private activeBody(camera: THREE.PerspectiveCamera): WaterBody | null {
+  /**
+   * Nearest water body that is actually visible: in the view frustum AND with at least one of
+   * its surface sample points in view and not hidden behind the terrain (CPU line of sight on
+   * the course heightfield). Perf: the planar reflection re-renders most of the scene, and the
+   * loose bounding-sphere test alone fired for ponds hidden behind a hill (e.g. the first tee).
+   */
+  private activeBody(camera: THREE.PerspectiveCamera, course: FrameContext['course']): WaterBody | null {
     this.projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(this.projView);
-    let best: WaterBody | null = null;
-    let bestD = REFL_MAX_DIST;
+    const cam = camera.position;
+    const cands: { b: WaterBody; d: number }[] = [];
     for (const b of this.bodies) {
-      if (!this.frustum.intersectsSphere(b.sphere)) continue;
-      const d = Math.max(0, b.sphere.center.distanceTo(camera.position) - b.sphere.radius);
-      if (d < bestD) { bestD = d; best = b; }
+      if (!this.frustum.intersectsBox(b.box)) continue;
+      const d = b.box.distanceToPoint(cam);
+      if (d < REFL_MAX_DIST) cands.push({ b, d });
     }
-    return best;
+    cands.sort((x, y) => x.d - y.d);
+    // Re-test line of sight only every few frames while the same body stays a candidate.
+    if (this.visCheckSkip > 0 && this.lastBody && cands.some((c) => c.b === this.lastBody)) {
+      this.visCheckSkip--;
+      return this.lastBody;
+    }
+    for (const { b } of cands) if (this.bodyVisible(b, cam, course)) return b;
+    return null;
+  }
+
+  /** Any sample point of the body inside the frustum with a clear line of sight over the terrain. */
+  private bodyVisible(b: WaterBody, cam: THREE.Vector3, course: FrameContext['course']): boolean {
+    const s = b.samples;
+    if (!s.length) return true;
+    const y = b.level + 0.05;
+    for (let q = 0; q < s.length; q += 2) {
+      const px = s[q], pz = s[q + 1];
+      if (!this.frustum.containsPoint(_v.set(px, y, pz))) continue;
+      const dx = px - cam.x, dy = y - cam.y, dz = pz - cam.z;
+      const len = Math.hypot(dx, dz);
+      const n = Math.max(1, Math.ceil(len / VIS_STEP));
+      let clear = true;
+      // skip the last step: the water sits in a terrain hollow right at the sample point
+      for (let k = 1; k < n - 1; k++) {
+        const t = k / n;
+        if (course.height(cam.x + dx * t, cam.z + dz * t) > cam.y + dy * t + 0.1) {
+          clear = false;
+          break;
+        }
+      }
+      if (clear) return true;
+    }
+    return false;
   }
 
   update(ctx: FrameContext) {
     if (!this.mesh) return;
     if (WATER_CAM) this.devCamera(ctx);
     this.uReflBody.value = -1;
+    this.reflecting = false;
     if (!ctx.quality.waterReflections) return;
     const cam = ctx.camera;
     cam.updateMatrixWorld();
-    const b = this.activeBody(cam);
+    // Visibility is re-tested every few frames; a body stays reflected for VIS_HOLD frames after
+    // it was last seen so the reflection never flickers on/off at a silhouette.
+    let b = this.activeBody(cam, ctx.course);
+    if (b) {
+      if (b !== this.lastBody || this.visCheckSkip === 0) this.visCheckSkip = 3;
+      this.lastBody = b;
+      this.holdFrames = VIS_HOLD;
+    } else if (this.lastBody && this.holdFrames > 0 && this.frustum.intersectsBox(this.lastBody.box)) {
+      this.holdFrames--;
+      b = this.lastBody;
+    } else {
+      this.lastBody = null;
+      this.holdFrames = 0;
+    }
+    this.reflecting = b !== null;
     if (!b) return;
     // Hide named heavy/irrelevant groups (grass, rain, effects) for the reflection pass.
     const extra = this.hiddenTmp;

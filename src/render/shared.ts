@@ -64,6 +64,19 @@ export const QUALITY: Record<QualityLevel, QualityPreset> = {
   ultra: { level: 'ultra', pixelRatioCap: 2, shadowMapSize: 4096, shadowDistance: 220, grassRadius: 75, grassDensity: 80, treeCount: 3800, drawDistance: 4000, terrainLodBias: 1.3, ao: true, bloom: true, dof: true, smaa: true, waterReflections: true, cloudSteps: 24 },
 };
 
+/**
+ * Per-preset render budgets for one frame, ALL passes included (main + sun shadow + water
+ * reflection + cloud-cube face + post). Checked by the F3 perf overlay (outlined red when
+ * exceeded) and by the headless budget measurements (see DECISIONS.md). Target: 60 fps at 1440p
+ * on a decent gaming PC on High.
+ */
+export const PERF_BUDGETS: Record<QualityLevel, { calls: number; triangles: number }> = {
+  low: { calls: 120, triangles: 1_000_000 },
+  medium: { calls: 200, triangles: 2_000_000 },
+  high: { calls: 250, triangles: 3_000_000 },
+  ultra: { calls: 350, triangles: 4_500_000 },
+};
+
 export interface FrameContext {
   time: number;
   dt: number;
