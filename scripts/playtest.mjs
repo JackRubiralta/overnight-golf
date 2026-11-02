@@ -15,7 +15,7 @@ const OUT = 'screenshots/_wip/play';
 fs.mkdirSync(OUT, { recursive: true });
 
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-gpu-watchdog'] });
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const page = await browser.newPage({ viewport: { width: Number(process.env.PT_W || 960), height: Number(process.env.PT_H || 540) } });
 await page.routeWebSocket(/.*/, () => {});
 const errors = [];
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -165,6 +165,15 @@ for (const [hi, hole] of holes.entries()) {
     await tap('Escape');
     s = await st();
     check('Escape resumes to stance', s.mode === 'stance', s.mode);
+    // Scorecard overlay + pause interplay (must never get stuck in an invisible scorecard).
+    await tap('Backquote');
+    const c1 = (await st()).mode;
+    await tap('Escape');
+    const c2 = (await st()).mode;
+    await tap('Escape');
+    const c3 = (await st()).mode;
+    check('scorecard (`) → pause → resume returns to play', c1 === 'scorecard' && c2 === 'paused' && c3 === 'stance', `${c1} → ${c2} → ${c3}`);
+    if (c3 === 'scorecard') await tap('Backquote');
     // Practice swing does not count
     await tap('KeyX');
     let r = await page.evaluate(() => window.__game.debugShot({ clubSpeed: 100 }));

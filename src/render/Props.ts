@@ -51,7 +51,11 @@ const CANOPY_SHRINK = 0.85; // canopy collision sphere vs visual radius
 const WINDOW_GLOW = { day: 0.25, low: 2.4 };
 const LAMP_GLOW = { day: 0.4, low: 3.2 };
 
+const _pv = new THREE.Matrix4();
+const _frustum = new THREE.Frustum();
+
 export class Props implements RenderModule, CollisionWorld {
+  readonly perfName = 'props';
   /** The golf ball mesh (position set by the game every frame). */
   ball = new THREE.Group();
   /** Called by the game when the ball hits a prop (for sounds/score). */
@@ -194,6 +198,12 @@ export class Props implements RenderModule, CollisionWorld {
     // Distance culling of static clusters.
     const cam = ctx.camera.position;
     const lim = CULL_SMALL[ctx.quality.level];
+    if (this.dyn) {
+      ctx.camera.updateMatrixWorld();
+      _pv.multiplyMatrices(ctx.camera.projectionMatrix, ctx.camera.matrixWorldInverse);
+      _frustum.setFromProjectionMatrix(_pv);
+      this.dyn.cull(_frustum, cam, lim, ctx.quality.shadowDistance);
+    }
     for (const c of this.clusters) {
       const d = c.center.distanceTo(cam) - c.radius;
       c.group.visible = c.size === 'large' ? d < ctx.quality.drawDistance : d < (c.size === 'fence' ? lim * FENCE_CULL_FACTOR : lim);

@@ -62,6 +62,7 @@ export interface WaterBody {
 }
 
 export class WaterSystem implements RenderModule {
+  readonly perfName = 'water';
   mesh: THREE.Mesh | null = null;
   material!: THREE.MeshPhysicalMaterial;
   bodies: WaterBody[] = [];

@@ -134,6 +134,9 @@ const _v2 = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const ONE = new THREE.Vector3(1, 1, 1);
 const ZERO_M = new THREE.Matrix4().makeScale(0, 0, 0);
+/** Padding (m) of a site's cull sphere around its props' rest positions (prop size + slack). */
+const SITE_PAD = 3;
+let _siteVis = new Uint8Array(16);
 
 /** Merge per-material parts of a bucket into one grouped geometry for an InstancedMesh. */
 function multiGeo(b: GeoBucket, keys: string[], mats: PropMaterials) {
@@ -204,6 +207,12 @@ export class DynamicProps {
   private shardMeshes: THREE.InstancedMesh[] = [];
   private shards: DynProp[] = [];
   private awake = new Set<DynProp>();
+  /** Per-site bounds (grown when bodies move) and, per visual type, the highest instance index
+   *  + 1 used by each site — so off-screen / distant sites can be culled by trimming `count`. */
+  private siteSpheres: THREE.Sphere[] = [];
+  private siteMax = new Map<VisualType, Int32Array>();
+  private shardSiteMax = new Int32Array(0);
+  private anyShards = false;
   private rand = rng(777);
   /** Called for secondary events (pots broken by falls) so the game can play sounds. */
   onBreak: ((p: { id: string; kind: DynKind; pos: THREE.Vector3; speed: number }) => void) | null = null;
@@ -381,6 +390,57 @@ export class DynamicProps {
     for (const v of this.visuals.values()) if (v.mesh) {
       v.mesh.instanceMatrix.needsUpdate = true;
       v.mesh.computeBoundingSphere();
+    }
+    // Culling data (perf): instanced meshes span every site, so they are culled per site on the
+    // CPU (see cull()) instead of by three's frustum test on one course-sized bounding sphere.
+    const nSites = this.sites.length;
+    this.siteSpheres = this.sites.map((s) => new THREE.Sphere(s.frame.pos.clone(), 0));
+    for (const v of this.visuals.values()) this.siteMax.set(v, new Int32Array(nSites));
+    this.shardSiteMax = new Int32Array(nSites);
+    for (const p of this.props) {
+      this.growSite(p.site, p.pos, SITE_PAD);
+      for (const r of p.vis) {
+        const arr = this.siteMax.get(this.visuals.get(r.type)!)!;
+        arr[p.site] = Math.max(arr[p.site], r.index + 1);
+      }
+      if (p.potIndex >= 0) this.shardSiteMax[p.site] = Math.max(this.shardSiteMax[p.site], p.potIndex + 1);
+    }
+  }
+
+  private growSite(site: number, pos: THREE.Vector3, pad: number) {
+    const s = this.siteSpheres[site];
+    if (!s) return;
+    const d = s.center.distanceTo(pos) + pad;
+    if (d > s.radius) s.radius = d;
+  }
+
+  /**
+   * Per-site visibility (perf): a site is drawn when it is within `maxDist` and in the view
+   * frustum, or within `keepDist` (it may cast a shadow into view). Each instanced mesh then
+   * draws only the instance prefix that covers its visible sites (or nothing).
+   */
+  cull(frustum: THREE.Frustum, cam: THREE.Vector3, maxDist: number, keepDist: number) {
+    const n = this.siteSpheres.length;
+    const vis = _siteVis.length >= n ? _siteVis : (_siteVis = new Uint8Array(n));
+    for (let i = 0; i < n; i++) {
+      const s = this.siteSpheres[i];
+      const d = s.center.distanceTo(cam) - s.radius;
+      vis[i] = d < maxDist && (d < keepDist || frustum.intersectsSphere(s)) ? 1 : 0;
+    }
+    for (const [v, arr] of this.siteMax) {
+      if (!v.mesh) continue;
+      let count = 0;
+      for (let i = 0; i < n; i++) if (vis[i] && arr[i] > count) count = arr[i];
+      v.mesh.count = count;
+      v.mesh.visible = count > 0;
+    }
+    if (this.anyShards) {
+      let count = 0;
+      for (let i = 0; i < n; i++) if (vis[i] && this.shardSiteMax[i] > count) count = this.shardSiteMax[i];
+      for (const m of this.shardMeshes) {
+        m.count = count;
+        m.visible = count > 0;
+      }
     }
   }
 
@@ -762,6 +822,7 @@ export class DynamicProps {
       }
       this.awake.add(p);
       this.readPose(p);
+      this.growSite(p.site, p.pos, 1.5);
       // Fell off the patch: freeze.
       if (p.pos.y < this.course.height(p.pos.x, p.pos.z) - 3) p.body.sleep();
       this.syncVisual(p);
@@ -773,6 +834,7 @@ export class DynamicProps {
     for (const s of this.shards) {
       if (!s.body || s.body.isSleeping()) continue;
       this.readPose(s);
+      this.growSite(s.site, s.pos, 0.5);
       if (s.pos.y < this.course.height(s.pos.x, s.pos.z) - 2) s.body.sleep();
       _m.compose(s.pos, s.quat, ONE);
       this.shardMeshes[s.shard!.k].setMatrixAt(s.shard!.pot, _m);
@@ -883,6 +945,7 @@ export class DynamicProps {
       s.body!.setLinvel(v, true);
       s.body!.setAngvel({ x: (this.rand() - 0.5) * 18, y: (this.rand() - 0.5) * 18, z: (this.rand() - 0.5) * 18 }, true);
       this.shards.push(s);
+      this.anyShards = true;
       this.shardMeshes[k].visible = true;
       _m.compose(s.pos, s.quat, ONE);
       this.shardMeshes[k].setMatrixAt(p.potIndex, _m);

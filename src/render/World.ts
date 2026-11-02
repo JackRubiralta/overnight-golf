@@ -6,7 +6,8 @@ import * as THREE from 'three';
 import type { Course } from '../course/Course';
 import type { CourseGrids } from '../course/CourseField';
 import { settings } from '../core/settings';
-import { phase, markStart, gpuSync } from './perf/timing';
+import { phase, markStart, gpuSync, PERF_SYNC } from './perf/timing';
+import { FrameStats, type FrameStatsSnapshot } from './perf/FrameStats';
 import { QUALITY, createCourseTextures, globalUniforms, type CourseTextures, type FrameContext, type InitContext, type QualityPreset, type RenderModule } from './shared';
 
 export interface PostPipeline {
@@ -35,6 +36,10 @@ export class World {
   hole = 0;
   mode = 'menu';
   private initCtx!: InitContext;
+  private syncFrames = 0;
+  /** Per-frame, per-pass renderer accounting (see perf/FrameStats.ts). */
+  readonly perf: FrameStats;
+  private moduleNames: string[] = [];
 
   constructor(canvasParent: HTMLElement) {
     this.quality = QUALITY[settings.get('quality')];
@@ -49,6 +54,7 @@ export class World {
 
     this.camera = new THREE.PerspectiveCamera(settings.get('fov'), 1, 0.1, this.quality.drawDistance);
     this.scene.add(this.camera);
+    this.perf = new FrameStats(this.renderer, this.scene, this.camera);
 
     this.sun = new THREE.DirectionalLight(0xfff1dd, 3.2);
     this.sun.castShadow = true;
@@ -79,6 +85,7 @@ export class World {
     this.grids = grids;
     this.textures = createCourseTextures(grids);
     this.modules = modules;
+    this.moduleNames = modules.map(moduleName);
     this.post = post;
     this.initCtx = {
       scene: this.scene,
@@ -116,6 +123,7 @@ export class World {
 
   addModule(m: RenderModule) {
     this.modules.push(m);
+    this.moduleNames.push(moduleName(m));
     if (this.initCtx) void m.init?.(this.initCtx);
   }
 
@@ -186,20 +194,50 @@ export class World {
       hole: this.hole,
       mode: this.mode,
     };
-    for (const m of this.modules) m.update?.(ctx);
+    const perf = this.perf;
+    perf.begin();
+    if (PERF_SYNC && this.syncFrames < 3) {
+      // ?perfsync: per-module GPU-synchronised breakdown of the first frames (load profiling).
+      this.syncFrames++;
+      const gl = this.renderer.getContext();
+      gpuSync(gl);
+      markStart();
+      for (const m of this.modules) {
+        m.update?.(ctx);
+        gpuSync(gl);
+        phase(`frame${this.syncFrames} update ${m.constructor.name}`);
+      }
+      if (this.post) this.post.render(ctx);
+      else this.renderer.render(this.scene, this.camera);
+      gpuSync(gl);
+      phase(`frame${this.syncFrames} render`);
+      perf.end();
+      return;
+    }
+    const mods = this.modules;
+    for (let i = 0; i < mods.length; i++) {
+      perf.setBucket(this.moduleNames[i]);
+      mods[i].update?.(ctx);
+    }
+    perf.setBucket('post');
     if (this.post) this.post.render(ctx);
     else this.renderer.render(this.scene, this.camera);
+    perf.end();
   }
 
-  /** Renderer stats for performance budgets. */
-  stats() {
-    const i = this.renderer.info;
-    return {
-      calls: i.render.calls,
-      triangles: i.render.triangles,
-      geometries: i.memory.geometries,
-      textures: i.memory.textures,
-      programs: i.programs?.length ?? 0,
-    };
+  /**
+   * Renderer stats of the last frame for performance budgets: totals over every pass, a per-pass
+   * breakdown (main, shadow, sky = cloud cube, water = planar reflection, post, …), memory,
+   * timings and the active preset.
+   */
+  stats(): FrameStatsSnapshot & { preset: string; pixelRatio: number; size: [number, number] } {
+    const s = this.renderer.getDrawingBufferSize(_size);
+    return { ...this.perf.snapshot(), preset: this.quality.level, pixelRatio: this.renderer.getPixelRatio(), size: [s.x, s.y] };
   }
+}
+
+const _size = new THREE.Vector2();
+
+function moduleName(m: RenderModule): string {
+  return (m.perfName ?? m.constructor.name ?? 'module').toLowerCase();
 }

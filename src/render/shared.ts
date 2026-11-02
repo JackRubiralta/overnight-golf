@@ -79,6 +79,8 @@ export interface FrameContext {
 }
 
 export interface RenderModule {
+  /** Short label for perf accounting (World.stats().passes); defaults to the class name. */
+  readonly perfName?: string;
   /** Called once after the course is baked and the scene exists. */
   init?(ctx: InitContext): void | Promise<void>;
   update?(ctx: FrameContext): void;

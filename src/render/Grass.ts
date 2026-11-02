@@ -71,6 +71,7 @@ interface Ring {
 }
 
 export class Grass implements RenderModule {
+  readonly perfName = 'grass';
   group = new THREE.Group();
   private rings: Ring[] = [];
   private ctx: InitContext | null = null;

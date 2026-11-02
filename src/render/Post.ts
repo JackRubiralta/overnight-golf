@@ -9,8 +9,8 @@
  *
  * The composer tone maps, so renderer.toneMapping is NoToneMapping while the pipeline is active;
  * exposure still comes from renderer.toneMappingExposure (set by the Sky presets) because the
- * ToneMappingEffect uses three's tone-mapping chunk. renderer.info is reset once per frame here
- * (autoReset off) so World.stats() reports the whole frame, not just the last full-screen pass.
+ * ToneMappingEffect uses three's tone-mapping chunk. renderer.info is reset once per frame by
+ * World (perf/FrameStats.ts, autoReset off) so World.stats() reports the whole frame.
  */
 import * as THREE from 'three';
 import {
@@ -163,7 +163,6 @@ export class Post implements PostPipeline {
 
   render(ctx: FrameContext) {
     const r = ctx.renderer;
-    r.info.reset();
     if (r.toneMapping !== THREE.NoToneMapping) r.toneMapping = THREE.NoToneMapping;
     this.composer.render(ctx.dt);
   }

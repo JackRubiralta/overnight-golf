@@ -80,6 +80,7 @@ interface Variant {
 const rangeIn = (a: number, b: number) => [a * (1 - BAND), a * (1 + BAND), b * (1 - BAND), b * (1 + BAND)] as const;
 
 export class Foliage implements RenderModule {
+  readonly perfName = 'foliage';
   colliders: TreeCollider[] = [];
   /**
    * Called after a quality change rebuilt `colliders` in place (trees within 50 m of the maintained

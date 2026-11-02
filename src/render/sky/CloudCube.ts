@@ -16,7 +16,9 @@ import { createCloudMaterial, type CloudUniforms } from './cloudShader';
 const JUMP_DIST = 120;
 /** Weight of a new refresh in the running average (lower = smoother, slower to react). */
 const ACCUM = 0.3;
-/** Extra accumulated full passes after a full (lighting) refresh, to start converged. */
+/** Extra accumulated full passes after a lighting refresh, to start converged. Camera jumps only
+ *  re-render the six faces once (the running average converges over the next cycles), which
+ *  keeps a camera cut at 6 face renders instead of 24 — perf: load time and shot-cut hitches. */
 const WARMUP_PASSES = 3;
 
 export class CloudCube {
@@ -29,6 +31,10 @@ export class CloudCube {
   private lastFull = new THREE.Vector3(Infinity, 0, 0);
   private steps: number;
   private jitterIndex = 0;
+  /** A lighting/config change is pending: the next full refresh accumulates WARMUP_PASSES. */
+  private needsWarmup = true;
+  /** Face renders issued since construction (perf accounting / tests). */
+  faceRenders = 0;
 
   constructor(
     private uniforms: CloudUniforms,
@@ -78,6 +84,7 @@ export class CloudCube {
   /** Force a full 6-face refresh on the next update (lighting/preset change). */
   invalidate() {
     this.lastFull.set(Infinity, 0, 0);
+    this.needsWarmup = true;
   }
 
   /** Render one face (or all six after invalidate()/a camera jump) from `pos`. */
@@ -92,11 +99,15 @@ export class CloudCube {
     renderer.autoClear = false; // the box covers every texel with NoBlending
     this.cubeCam.position.copy(pos);
     if (full) {
-      // replace, then accumulate a few jittered passes so the first frame is already smooth
-      for (let i = 0; i <= WARMUP_PASSES; i++) {
+      // replace, then (after a lighting change) accumulate a few jittered passes so the first
+      // frame is already smooth; a camera jump just replaces the six faces once
+      const passes = this.needsWarmup ? WARMUP_PASSES : 0;
+      for (let i = 0; i <= passes; i++) {
         this.setBlend(i > 0 ? 1 / (i + 1) : 1);
         this.cubeCam.update(renderer, this.scene);
+        this.faceRenders += 6;
       }
+      this.needsWarmup = false;
       this.lastFull.copy(pos);
       this.face = 0;
     } else {
@@ -108,6 +119,7 @@ export class CloudCube {
       this.setBlend(ACCUM);
       renderer.setRenderTarget(this.target, this.face, 0);
       renderer.render(this.scene, this.cubeCam.children[this.face] as THREE.Camera);
+      this.faceRenders++;
       this.face = (this.face + 1) % 6;
       if (this.face === 0) this.lastFull.copy(pos); // jump test is per 6-frame cycle
     }

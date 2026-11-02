@@ -64,12 +64,14 @@ export class CameraRig {
   address(ball: THREE.Vector3, aimDir: THREE.Vector3, dt: number, putting: boolean) {
     this.mode = 'address';
     const right = new THREE.Vector3().crossVectors(aimDir, UP).normalize();
-    const back = putting ? 2.6 : 3.6;
-    const up = putting ? 1.25 : 1.75;
+    // Framed so the ball sits ~12-14° below the screen centre: clear of the bottom HUD
+    // (club bar / hint) while the target line still runs up the middle of the screen.
+    const back = putting ? 3.0 : 4.6;
+    const up = putting ? 1.2 : 1.6;
     this.targetPos.copy(ball).addScaledVector(aimDir, -back).addScaledVector(right, -0.55).addScaledVector(UP, up);
-    const g = this.course.height(this.targetPos.x, this.targetPos.z) + 0.6;
+    const g = this.camGround(this.targetPos.x, this.targetPos.z) + 0.6;
     if (this.targetPos.y < g) this.targetPos.y = g;
-    this.targetLook.copy(ball).addScaledVector(aimDir, putting ? 8 : 40).addScaledVector(UP, putting ? -0.5 : 0.5);
+    this.targetLook.copy(ball).addScaledVector(aimDir, putting ? 6 : 12).addScaledVector(UP, putting ? -0.3 : 0);
     damp(this.pos, this.targetPos, 6, dt);
     damp(this.look, this.targetLook, 6, dt);
     this.apply(dt);

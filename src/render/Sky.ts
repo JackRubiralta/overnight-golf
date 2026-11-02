@@ -42,6 +42,7 @@ const WEATHER_FADE = 4;
 installHeightFog(); // must run before any material compiles (idempotent)
 
 export class SkySystem implements RenderModule {
+  readonly perfName = 'sky';
   /** The visible sky dome (follows the camera, drawn after opaque geometry). */
   sky!: THREE.Mesh;
   uniforms!: SkyUniforms;

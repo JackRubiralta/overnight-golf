@@ -34,6 +34,7 @@ const SHADOW_KEEP_MARGIN = 1.15;
 const PROGRAM_KEY = 'thornbury-terrain-v2';
 
 export class Terrain implements RenderModule {
+  readonly perfName = 'terrain';
   group = new THREE.Group();
   /** LOD0 material (all levels share one program; they differ only by morph/step uniforms). */
   material!: THREE.MeshStandardMaterial;
