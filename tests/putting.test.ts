@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Vector3 } from 'three';
-import { SwingModel } from '../src/swing/SwingModel';
+import { SwingModel, SWING_RANGE } from '../src/swing/SwingModel';
 import { clubById } from '../src/physics/clubs';
 import { computeLaunch, launchToWorld } from '../src/physics/impact';
 import { BallSim, FlatTerrain } from '../src/physics/BallSim';
@@ -10,7 +10,8 @@ function putt(backDeg: number, tDown: number) {
   const m = new SwingModel(clubById('P'));
   const S = m.geo.shoulder, R = m.geo.armLen; const dt = 1 / 240; m.grabbing = true;
   let t = 0; let imp = null as ReturnType<SwingModel['step']>;
-  const back = backDeg * DEG, through = backDeg * DEG;
+  // backDeg = ARM backstroke; the cursor (mouse) travels further by 1/SWING_RANGE.putter.
+  const back = (backDeg / SWING_RANGE.putter) * DEG, through = back;
   while (t < 3 && !imp) {
     let th; if (t < 0.6) th = -back * (1 - Math.cos(t / 0.6 * Math.PI)) / 2; else if (t < 0.7) th = -back; else { const u = Math.min(1, (t - 0.7) / tDown); th = -back + (back + through) * u * u * (3 - 2 * u); }
     m.drag(S.x + Math.sin(th) * R - m.cursor.x, S.y - Math.cos(th) * R - m.cursor.y);
@@ -43,5 +44,15 @@ describe('putting', () => {
     console.log('tempo fast', fast.dist.toFixed(2), 'slow', slow.dist.toFixed(2));
     expect(fast.dist / slow.dist).toBeLessThan(1.35);
     expect(fast.dist / slow.dist).toBeGreaterThan(0.75);
+  });
+});
+
+describe('putting sensitivity', () => {
+  it('a full mouse backswing with the putter is only a moderate putt', () => {
+    // 110° of cursor travel = a full swing gesture with the mouse.
+    const r = putt(110 * SWING_RANGE.putter, 0.6)!;
+    console.log('full mouse swing putt', r.dist.toFixed(1), 'm');
+    expect(r.dist).toBeGreaterThan(10);
+    expect(r.dist).toBeLessThan(25);
   });
 });

@@ -93,6 +93,13 @@ export function puttClubSpeedFor(d: number, smash: number): number {
   return Math.sqrt(2 * SURFACES.green.rollDecel * Math.max(0, d)) / smash;
 }
 
+/**
+ * Per-club swing range: how much of the mouse (cursor) angle the golfer's arms actually rotate.
+ * Softer clubs get less, so a big, controllable mouse motion makes a short stroke — lower
+ * sensitivity for putting and the short game.
+ */
+export const SWING_RANGE: Record<string, number> = { putter: 0.3, wedge: 0.8, iron: 1, hybrid: 1, wood: 1, driver: 1 };
+
 export class SwingModel {
   club: Club;
   geo: SwingGeometry;
@@ -136,11 +143,14 @@ export class SwingModel {
   speedScale = 1.3;
   /** Hand auto-return when the grab is released (original game behaviour). */
   autoReturn = true;
+  /** Fraction of the cursor's angle that the arms actually rotate (per club, see SWING_RANGE). */
+  angleGain = 1;
 
   constructor(club: Club, opts: { stance?: number; teed?: boolean } = {}) {
     this.club = club;
     this.geo = SwingModel.geometry(club, opts.stance ?? 0, opts.teed ?? false);
     if (club.kind === 'putter') this.speedScale = 0.75;
+    this.angleGain = SWING_RANGE[club.kind] ?? 1;
     this.reset();
   }
 
@@ -244,11 +254,14 @@ export class SwingModel {
     cy = g.shoulder.y - Math.cos(th) * r;
     this.cursor.x = cx;
     this.cursor.y = cy;
-    // Hand target: same angle, radial error scaled down, clamped to what the arms can reach.
+    // Hand target: the cursor angle scaled by the club's swing range (a full mouse swing is only a
+    // short stroke with the putter / a three-quarter swing with a wedge), radial error scaled down,
+    // clamped to what the arms can reach.
+    const ath = th * this.angleGain;
     let hr = g.armLen + (r - g.armLen) * this.radialGain;
     hr = Math.min(g.armLen * 1.035, Math.max(g.armLen * 0.35, hr));
-    this.target.x = g.shoulder.x + Math.sin(th) * hr;
-    this.target.y = g.shoulder.y - Math.cos(th) * hr;
+    this.target.x = g.shoulder.x + Math.sin(ath) * hr;
+    this.target.y = g.shoulder.y - Math.cos(ath) * hr;
   }
 
   /** Cursor radius range (fraction of arm length) that gives clean contact. */

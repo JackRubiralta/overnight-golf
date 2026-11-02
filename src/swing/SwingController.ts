@@ -19,7 +19,6 @@ export const BAG: Club[] = [clubById('D'), clubById('4H'), clubById('7I'), clubB
 
 /** Metres of hand-target travel per pixel of mouse movement at sensitivity 1. */
 const PX_TO_M = 0.0021;
-const PUTTER_SCALE = 0.42;
 const SIM_DT = 1 / 240;
 
 export interface SwingResult {
@@ -182,7 +181,7 @@ export class SwingController {
 
     // Mouse → hand target.
     const d = input.consumeSwingDelta();
-    const sens = settings.get('mouseSensitivity') * PX_TO_M * (this.club.kind === 'putter' ? PUTTER_SCALE : 1);
+    const sens = settings.get('mouseSensitivity') * PX_TO_M; // per-club swing range lives in SwingModel (SWING_RANGE)
     const sm = clamp(settings.get('mouseSmoothing'), 0, 0.9);
     // Exponential smoothing that preserves the total distance moved.
     this.smoothDx += d.dx;
@@ -215,7 +214,7 @@ export class SwingController {
       }
       m.grabbing = true;
       const mag = Math.min(1, Math.hypot(pad.x, pad.y));
-      const th = clamp(-pad.y, -1, 1) * (this.club.kind === 'putter' ? 35 : 118) * DEG;
+      const th = clamp(-pad.y, -1, 1) * 118 * DEG; // per-club swing range scales this in SwingModel
       const rho = m.geo.armLen * (0.99 + 0.045 * Math.max(0, mag - 0.9) / 0.1);
       const tx = m.geo.shoulder.x + Math.sin(th) * rho;
       const ty = m.geo.shoulder.y - Math.cos(th) * rho;

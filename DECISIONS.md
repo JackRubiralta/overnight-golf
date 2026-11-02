@@ -88,3 +88,12 @@ Decisions made autonomously during the overnight build, with the reasoning. Newe
   Over-swinging now mostly adds error (face flail), not distance.
 - **No more "hitting the drive twice"**: after a long shot the game used to drop you, in walking mode, where you hit from (on the tee after a drive). That looked and felt like a forced replay. The game now always takes you straight to your ball, ready to address it; Tab still lets you walk. Space no longer doubles as fast-forward (that's **F**). A retake (stroke and distance, +1) needs Space pressed twice within 2 s.
 - **Easier putting**: putt distance used to come from raw mouse speed at impact, which produced either tiny or huge putts. Putting is now a pendulum stroke. The **backstroke length sets the distance**, about 0.5 m per degree on a flat green, and tempo only nudges it by about ±12%. A live hint shows how far the current backstroke will roll and how far the hole is. Slopes and fringe still affect the real roll.
+- **Per-club swing range (lower sensitivity for soft clubs)**: the arms rotate only a fraction of the mouse cursor's angle. The full-swing clubs are unchanged.
+
+  | Club | Arm rotation (share of cursor angle) | Result |
+  |---|---|---|
+  | Putter | 30% | A full mouse backswing is only about a 16 m putt; 1 m ≈ 35 px of mouse |
+  | Wedge | 80% | Full swing ≈ 80 yd, half swing ≈ 47 yd |
+  | Iron, hybrid, woods, driver | 100% | Unchanged |
+
+  Big, comfortable mouse motions now make small, controllable strokes. This replaces the old putter-only pixel scale.
