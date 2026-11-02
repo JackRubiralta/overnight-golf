@@ -290,8 +290,10 @@ export class Game {
 
   /** Smoothed frames per second (for tests / perf HUD). */
   fps = 0;
+  frameCount = 0;
 
   update(dtRaw: number) {
+    this.frameCount++;
     if (dtRaw > 0) this.fps = this.fps ? this.fps * 0.9 + 0.1 / dtRaw : 1 / dtRaw;
     const dt = Math.min(dtRaw, 0.05);
     this.time += dt;
@@ -817,6 +819,9 @@ export class Game {
       },
       get fps() {
         return game.fps;
+      },
+      get frames() {
+        return game.frameCount;
       },
     };
     const game = this;

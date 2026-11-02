@@ -27,21 +27,27 @@ const g = () => page.evaluate(() => {
   const s = window.__game;
   return { mode: s.mode, strokes: s.strokes, swing: s.swing, sim: s.simState, report: s.lastReport, ball: s.ball };
 });
+// Wait until the game has rendered n more frames (headless software rendering can be slow).
+const frames = async (n = 2) => {
+  const f0 = await page.evaluate(() => window.__game.frames);
+  await page.waitForFunction((t) => window.__game.frames >= t, f0 + n, { timeout: 120000, polling: 50 });
+};
 const tap = async (key, times = 1) => {
   for (let i = 0; i < times; i++) {
     await page.keyboard.down(key);
-    await page.waitForTimeout(40);
+    await frames(1);
     await page.keyboard.up(key);
-    await page.waitForTimeout(40);
+    await frames(1);
   }
+  await frames(2);
 };
 
 await page.goto(`http://localhost:${port}/?play=0&q=low`);
 await page.waitForFunction(() => window.__ready === true && window.__game, null, { timeout: 240000 });
 await page.waitForTimeout(1500);
 // Give the canvas focus.
-await page.mouse.click(640, 500);
-await page.waitForTimeout(300);
+await frames(3);
+console.log('fps', await page.evaluate(() => window.__game.fps.toFixed(1)));
 let s = await g();
 check('starts in golf stance on hole 1', s.mode === 'stance', s.mode);
 
@@ -115,17 +121,17 @@ for (let i = 1; i <= backSteps; i++) {
   const u = i / backSteps;
   const p = pos(back * (1 - Math.cos(u * Math.PI)) / 2);
   await page.mouse.move(p.x, p.y);
-  await page.waitForTimeout(28);
+  await frames(1);
 }
-await page.waitForTimeout(120);
-const downSteps = 10;
+await frames(2);
+const downSteps = 7;
 for (let i = 1; i <= downSteps; i++) {
   const u = i / downSteps;
   const p = pos(back + (through - back) * (u * u * (3 - 2 * u)));
   await page.mouse.move(p.x, p.y);
-  await page.waitForTimeout(16);
+  await frames(1);
 }
-await page.waitForTimeout(150);
+await frames(4);
 await page.mouse.up({ button: 'left' });
 // Wait for the shot to start.
 let started = false;
