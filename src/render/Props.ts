@@ -161,6 +161,7 @@ export class Props implements RenderModule, CollisionWorld {
 
     // Hittable Rapier props
     this.dyn = new DynamicProps(course, mats, col, PROP_SITES);
+    this.dyn.group.userData.noReflect = true; // perf: not drawn into the water reflection
     this.root.add(this.dyn.group);
     for (const s of this.dyn.staticBuckets) this.addCluster(s.bucket, s.center, s.radius, 'small');
     this.dyn.onBreak = (e) => this.emit({ id: e.id, kind: e.kind, pos: e.pos, speed: e.speed, broken: true });
@@ -194,6 +195,8 @@ export class Props implements RenderModule, CollisionWorld {
       const bs = m.geometry.boundingSphere;
       if (bs) r = Math.max(r, bs.center.distanceTo(center) + bs.radius);
     }
+    // perf: small props and fence runs are not drawn into the water's planar reflection
+    if (size !== 'large') group.userData.noReflect = true;
     this.root.add(group);
     this.clusters.push({ group, center, radius: r, size });
   }

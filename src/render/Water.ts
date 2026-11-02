@@ -71,6 +71,9 @@ export interface WaterBody {
 const VIS_SAMPLES = 40;
 /** Ray-march step (m) of the terrain line-of-sight test. */
 const VIS_STEP = 2.5;
+/** Margin (fraction of the screen) around the water's projected bounds for the reflection
+ *  scissor: covers the ripple distortion of the lookup. */
+const REFL_RECT_MARGIN = 0.04;
 /** Keep the planar reflection this many frames after its body was last seen (hysteresis). */
 const VIS_HOLD = 8;
 
@@ -87,6 +90,7 @@ export class WaterSystem implements RenderModule {
   private projView = new THREE.Matrix4();
   private hiddenTmp: THREE.Object3D[] = [];
   private lastBody: WaterBody | null = null;
+  private rect = new THREE.Vector4();
   private holdFrames = 0;
   private visCheckSkip = 0;
   /** Whether the planar reflection was rendered this frame (perf HUD). */
@@ -280,6 +284,30 @@ export class WaterSystem implements RenderModule {
     return null;
   }
 
+  /**
+   * Screen rectangle (uv, 0..1) covered by the body's bounds plus a margin for the ripple
+   * distortion, or null (full screen) when the bounds reach behind the camera.
+   */
+  private screenRect(b: WaterBody, cam: THREE.PerspectiveCamera): THREE.Vector4 | null {
+    const bx = b.box;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let k = 0; k < 8; k++) {
+      _v.set(k & 1 ? bx.max.x : bx.min.x, k & 2 ? bx.max.y : bx.min.y, k & 4 ? bx.max.z : bx.min.z);
+      _v.applyMatrix4(cam.matrixWorldInverse);
+      if (_v.z > -cam.near) return null;
+      _v.applyMatrix4(cam.projectionMatrix);
+      x0 = Math.min(x0, _v.x); x1 = Math.max(x1, _v.x);
+      y0 = Math.min(y0, _v.y); y1 = Math.max(y1, _v.y);
+    }
+    const m = REFL_RECT_MARGIN;
+    return this.rect.set(
+      Math.max(0, x0 * 0.5 + 0.5 - m),
+      Math.max(0, y0 * 0.5 + 0.5 - m),
+      Math.min(1, x1 * 0.5 + 0.5 + m),
+      Math.min(1, y1 * 0.5 + 0.5 + m),
+    );
+  }
+
   /** Any sample point of the body inside the frustum with a clear line of sight over the terrain. */
   private bodyVisible(b: WaterBody, cam: THREE.Vector3, course: FrameContext['course']): boolean {
     const s = b.samples;
@@ -333,7 +361,7 @@ export class WaterSystem implements RenderModule {
     const extra = this.hiddenTmp;
     extra.length = 0;
     for (const o of ctx.scene.children) if (o.visible && NO_REFLECT_NAMES.has(o.name)) { o.visible = false; extra.push(o); }
-    const ok = this.reflection.render(ctx.renderer, ctx.scene, cam, b.level);
+    const ok = this.reflection.render(ctx.renderer, ctx.scene, cam, b.level, this.screenRect(b, cam));
     for (const o of extra) o.visible = true;
     extra.length = 0;
     if (ok) this.uReflBody.value = this.bodies.indexOf(b);

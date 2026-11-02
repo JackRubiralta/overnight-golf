@@ -61,7 +61,7 @@ export const QUALITY: Record<QualityLevel, QualityPreset> = {
   low: { level: 'low', pixelRatioCap: 1, shadowMapSize: 1024, shadowDistance: 80, grassRadius: 28, grassDensity: 18, treeCount: 900, drawDistance: 1600, terrainLodBias: 0.6, ao: false, bloom: false, dof: false, smaa: true, waterReflections: false, cloudSteps: 0 },
   medium: { level: 'medium', pixelRatioCap: 1.25, shadowMapSize: 2048, shadowDistance: 120, grassRadius: 40, grassDensity: 32, treeCount: 1600, drawDistance: 2200, terrainLodBias: 0.85, ao: true, bloom: true, dof: false, smaa: true, waterReflections: true, cloudSteps: 8 },
   high: { level: 'high', pixelRatioCap: 1.5, shadowMapSize: 4096, shadowDistance: 160, grassRadius: 55, grassDensity: 50, treeCount: 2600, drawDistance: 3000, terrainLodBias: 1, ao: true, bloom: true, dof: true, smaa: true, waterReflections: true, cloudSteps: 16 },
-  ultra: { level: 'ultra', pixelRatioCap: 2, shadowMapSize: 4096, shadowDistance: 220, grassRadius: 75, grassDensity: 80, treeCount: 3800, drawDistance: 4000, terrainLodBias: 1.3, ao: true, bloom: true, dof: true, smaa: true, waterReflections: true, cloudSteps: 24 },
+  ultra: { level: 'ultra', pixelRatioCap: 2, shadowMapSize: 4096, shadowDistance: 220, grassRadius: 75, grassDensity: 64, treeCount: 3800, drawDistance: 4000, terrainLodBias: 1.3, ao: true, bloom: true, dof: true, smaa: true, waterReflections: true, cloudSteps: 24 },
 };
 
 /**

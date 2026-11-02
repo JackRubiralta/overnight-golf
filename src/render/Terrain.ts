@@ -9,11 +9,11 @@
  * beyond the baked 1600 m world so the heightmap edge is never visible.
  *
  * Cost: one draw call per LOD level (≤ 5) + 1 for the horizon ring in the main pass, ≤ 2 for
- * the sun shadow pass.
+ * the sun shadow pass (shadow-only copies holding just the chunks inside the shadow frustum).
  */
 import * as THREE from 'three';
 import { courseUniforms, globalUniforms, type FrameContext, type InitContext, type QualityPreset, type RenderModule } from './shared';
-import { ChunkSelector, LOD_STEPS, buildChunks, buildLevelGeometry, lodSwitchDistances, morphWindows, shadowCastingLevel } from './terrain/ChunkGrid';
+import { ChunkSelector, LOD_STEPS, SHADOW_LAYER, buildChunks, buildLevelGeometry, lodSwitchDistances, morphWindows, shadowCastingLevel } from './terrain/ChunkGrid';
 import { bakeSlopeTexture, buildMowData } from './terrain/TerrainData';
 import { buildFarRingGeometry } from './terrain/FarRing';
 import {
@@ -29,8 +29,6 @@ import {
 
 /** Shader detail level per quality preset (0 = cheapest). */
 const DETAIL_BY_QUALITY: Record<QualityPreset['level'], number> = { low: 0, medium: 1, high: 2, ultra: 2 };
-/** Chunks within this distance are kept even when off-screen (they may cast shadows into view). */
-const SHADOW_KEEP_MARGIN = 1.15;
 const PROGRAM_KEY = 'thornbury-terrain-v2';
 
 export class Terrain implements RenderModule {
@@ -45,6 +43,11 @@ export class Terrain implements RenderModule {
   slopeTexture!: THREE.DataTexture;
   private depthMaterials: THREE.MeshDepthMaterial[] = [];
   private meshes: THREE.InstancedMesh[] = [];
+  /** Shadow-only casters (layer SHADOW_LAYER) for the shadow-casting levels. */
+  private shadowMeshes: THREE.InstancedMesh[] = [];
+  private sun: THREE.DirectionalLight | null = null;
+  private shadowFrustum = new THREE.Frustum();
+  private shadowPV = new THREE.Matrix4();
   private selector!: ChunkSelector;
   private levelUniforms: { uStep: THREE.IUniform<number>; uMorph: THREE.IUniform<THREE.Vector2> }[] = [];
   private detail = 2;
@@ -78,18 +81,33 @@ export class Terrain implements RenderModule {
       const depth = this.createDepthMaterial({ ...shared, ...lu });
       this.materials.push(mat);
       this.depthMaterials.push(depth);
-      const mesh = new THREE.InstancedMesh(buildLevelGeometry(step, cell), mat, chunks.length);
+      const geo = buildLevelGeometry(step, cell);
+      const mesh = new THREE.InstancedMesh(geo, mat, chunks.length);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.count = 0;
       mesh.frustumCulled = false; // culled per chunk on the CPU
       mesh.matrixAutoUpdate = false;
       mesh.receiveShadow = true;
-      mesh.castShadow = shadowCastingLevel(k);
-      mesh.customDepthMaterial = depth;
+      mesh.castShadow = false; // the shadow pass draws the shadow-only copies below
       mesh.raycast = () => {}; // use Course.height() / Course.normal() for queries
       mesh.name = `terrain-lod${k}`;
       this.meshes.push(mesh);
       this.group.add(mesh);
+      if (shadowCastingLevel(k)) {
+        const sm = new THREE.InstancedMesh(geo, mat, chunks.length);
+        sm.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        sm.count = 0;
+        sm.frustumCulled = false;
+        sm.matrixAutoUpdate = false;
+        sm.castShadow = true;
+        sm.receiveShadow = false;
+        sm.customDepthMaterial = depth;
+        sm.layers.set(SHADOW_LAYER);
+        sm.raycast = () => {};
+        sm.name = `terrain-shadow-lod${k}`;
+        this.shadowMeshes.push(sm);
+        this.group.add(sm);
+      }
     });
     this.material = this.materials[0];
 
@@ -103,21 +121,22 @@ export class Terrain implements RenderModule {
     this.farRing.raycast = () => {};
     this.group.add(this.farRing);
     this.selector = new ChunkSelector(chunks, this.meshes);
+    this.selector.shadowMeshes = this.shadowMeshes;
+    this.sun = ctx.sun;
+    // The sun's shadow camera must see the shadow-only layer (the views never do).
+    ctx.sun.shadow.camera.layers.enable(SHADOW_LAYER);
     ctx.scene.add(this.group);
     this.setQuality(ctx.quality);
     // Select chunks once so the very first frame is complete.
     ctx.camera.updateMatrixWorld();
-    this.selector.update(ctx.camera);
+    this.selector.update(ctx.camera, this.computeShadowFrustum());
   }
 
   setQuality(q: QualityPreset) {
     const sw = lodSwitchDistances(q.terrainLodBias);
     const win = morphWindows(sw);
     this.levelUniforms.forEach((u, k) => u.uMorph.value.copy(win[k]));
-    if (this.selector) {
-      this.selector.switchDist = sw;
-      this.selector.shadowKeep = q.shadowDistance * SHADOW_KEEP_MARGIN;
-    }
+    if (this.selector) this.selector.switchDist = sw;
     const detail = DETAIL_BY_QUALITY[q.level];
     if (detail !== this.detail) {
       this.detail = detail;
@@ -130,7 +149,19 @@ export class Terrain implements RenderModule {
 
   update(ctx: FrameContext) {
     ctx.camera.updateMatrixWorld();
-    this.selector.update(ctx.camera);
+    this.selector.update(ctx.camera, this.computeShadowFrustum());
+  }
+
+  /** Frustum of the sun's shadow camera as it will be rendered this frame (null: no shadows). */
+  private computeShadowFrustum(): THREE.Frustum | null {
+    const sun = this.sun;
+    if (!sun || !sun.castShadow || !sun.visible) return null;
+    sun.updateMatrixWorld();
+    sun.target.updateMatrixWorld();
+    sun.shadow.updateMatrices(sun);
+    const cam = sun.shadow.camera;
+    this.shadowPV.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    return this.shadowFrustum.setFromProjectionMatrix(this.shadowPV);
   }
 
   /** Rendered terrain height (identical to physics). */
@@ -139,7 +170,7 @@ export class Terrain implements RenderModule {
   }
 
   dispose() {
-    for (const m of this.meshes) m.geometry.dispose();
+    for (const m of this.meshes) m.geometry.dispose(); // shadow copies share these geometries
     this.farRing?.geometry.dispose();
     for (const m of this.materials) m.dispose();
     for (const m of this.depthMaterials) m.dispose();

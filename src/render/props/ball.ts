@@ -62,6 +62,7 @@ export class BallVisual {
     this.shadow.name = 'ballShadow';
     this.shadow.renderOrder = 2;
     this.shadow.frustumCulled = false;
+    this.shadow.userData.noReflect = true; // a contact blob on the turf never shows in water
   }
 
   /** The shadow blob lives in world space (not under the ball group transform). */

@@ -228,6 +228,7 @@ export class Foliage implements RenderModule {
         const m = new THREE.InstancedMesh(geo, rockMat(u), 1);
         m.customDepthMaterial = patchFoliage(new THREE.MeshDepthMaterial(), { kind: 'rock', sway: 0, lod: u }, true);
         m.receiveShadow = true;
+        m.userData.noReflect = true; // perf: rocks are not drawn into the water reflection
         m.name = `rock${ri}-lod${detail}`;
         this.group.add(m);
         this.disposables.push(geo, m.material as THREE.Material, m.customDepthMaterial);
@@ -248,6 +249,7 @@ export class Foliage implements RenderModule {
       );
       const m = new THREE.InstancedMesh(geo, mat, 1);
       m.name = `flowers${fi}`;
+      m.userData.noReflect = true; // perf: not drawn into the water reflection
       m.castShadow = false;
       m.receiveShadow = true;
       m.userData.wantsColor = false;

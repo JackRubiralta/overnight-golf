@@ -302,11 +302,13 @@ export class Game {
   /** Smoothed frames per second (for tests / perf HUD). */
   fps = 0;
   frameCount = 0;
+  /** Game-time multiplier (test hook only; 1 in normal play). */
+  timeScale = 1;
 
   update(dtRaw: number) {
     this.frameCount++;
     if (dtRaw > 0) this.fps = this.fps ? this.fps * 0.9 + 0.1 / dtRaw : 1 / dtRaw;
-    const dt = Math.min(dtRaw, 0.05);
+    const dt = Math.min(dtRaw, 0.05) * this.timeScale;
     this.time += dt;
     this.input.update();
     this.wind.update(dt);
@@ -473,8 +475,10 @@ export class Game {
   private updateFlight(dt: number) {
     if (this.input.held('returnToBall') || this.input.held('retake')) this.fastForward = true;
     const scale = this.fastForward ? 3.5 : 1;
-    const events = this.sim.update(dt * scale);
-    for (const e of events) this.onBallEvent(e);
+    // BallSim.update caps one call at 0.1 s; feed larger fast-forward steps in chunks.
+    for (let rem = dt * scale; rem > 1e-6 && this.sim.moving; rem -= 0.1) {
+      for (const e of this.sim.update(Math.min(rem, 0.1))) this.onBallEvent(e);
+    }
     // Keep the golfer finishing the swing.
     this.swing.update(this.input, dt, false);
     if (this.shot) {
@@ -946,6 +950,12 @@ export class Game {
       },
       get hint() {
         return game.hint;
+      },
+      get timeScale() {
+        return game.timeScale;
+      },
+      set timeScale(v: number) {
+        game.timeScale = Math.max(0.1, Math.min(8, v));
       },
       get settled() {
         return game.mode !== 'flight';

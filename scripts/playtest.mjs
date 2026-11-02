@@ -106,7 +106,7 @@ const playStroke = async (opts, { fast = true, shots = {} } = {}) => {
   for (let i = 0; i < 3000; i += 2) {
     const s = await page.evaluate(() => ({ mode: window.__game.mode, sim: window.__game.simState, t: window.__game.frames }));
     if (!midDone && s.mode === 'flight' && s.sim === 'flight') {
-      await frames(shots.midFrames ?? 25);
+      await frames(shots.midFrames ?? 10);
       await capture(shots.mid);
       const m = await st();
       log(`mid-flight cam ${fmt(m.cam.y - m.cam.ground)} m above ground (mode ${m.cam.mode})`);
@@ -115,7 +115,7 @@ const playStroke = async (opts, { fast = true, shots = {} } = {}) => {
     }
     if (s.mode === 'flight' && s.sim !== 'flight' && s.sim !== 'rolling' && !settleCaptured) {
       // Ball at rest; let the settle camera move for a while (it holds ~1.6 s game time).
-      await frames(fast ? 2 : 18);
+      await frames(fast ? 2 : 8);
       const m = await st();
       restCam = m;
       if (shots.settle) await capture(shots.settle);
@@ -139,6 +139,9 @@ await page.goto(`http://localhost:${port}/?play=${holes[0]}&q=${quality}`);
 await page.waitForFunction(() => window.__ready === true && window.__game, null, { timeout: 300000 });
 await frames(3);
 await installRecorder();
+// Software rendering is slow (seconds per frame): run game time 3× faster per rendered frame.
+const TIME_SCALE = Number(process.env.PT_TIMESCALE || 3);
+await page.evaluate((k) => { window.__game.timeScale = k; }, TIME_SCALE);
 console.log('fps', await page.evaluate(() => window.__game.fps.toFixed(1)));
 
 for (const [hi, hole] of holes.entries()) {
@@ -151,7 +154,7 @@ for (const [hi, hole] of holes.entries()) {
   console.log(`\n=== Hole ${hole + 1}: ${fmt(s.dist)} m, mode ${s.mode}, lie ${s.lie}, suggested club ${s.club.id} ===`);
   check(`hole ${hole + 1} starts in stance on the tee`, s.mode === 'stance' && s.lie === 'tee', `${s.mode} ${s.lie}`);
   check(`hole ${hole + 1} tee club suggestion`, s.dist > 200 ? s.club.id === 'D' : s.club.id !== 'P' && s.club.id !== 'D', `${s.club.id} for ${fmt(s.dist)} m`);
-  await frames(20);
+  await frames(4);
   await capture(`h${hole + 1}-tee`);
   camCheck(`hole ${hole + 1} tee address`, await st(), s.ball, { maxUp: 3, maxDist: 6 });
 
@@ -161,7 +164,7 @@ for (const [hi, hole] of holes.entries()) {
     await tap('Escape');
     s = await st();
     check('Escape pauses', s.mode === 'paused', s.mode);
-    await frames(10);
+    await frames(3);
     await tap('Escape');
     s = await st();
     check('Escape resumes to stance', s.mode === 'stance', s.mode);
@@ -202,7 +205,7 @@ for (const [hi, hole] of holes.entries()) {
     });
     check(`hole ${hole + 1}: found a shot into the water`, !!w, JSON.stringify(w));
     if (w) {
-      const res = await playStroke(w, { fast: false, shots: { mid: `h${hole + 1}-water-flight`, midFrames: 15 } });
+      const res = await playStroke(w, { fast: false, shots: { mid: `h${hole + 1}-water-flight`, midFrames: 6 } });
       const rep = res.after.report;
       check('water: result water, +1 penalty (2 strokes)', rep?.result === 'water' && res.after.strokes === 2, `result=${rep?.result} strokes=${res.after.strokes}`);
       check('water: dropped on dry land', res.after.lie !== 'water', `lie=${res.after.lie}`);
@@ -281,13 +284,13 @@ for (const [hi, hole] of holes.entries()) {
     if (s.lie === 'green' && !sawGreen) {
       sawGreen = true;
       check('putter suggested on the green', suggested === 'P', suggested);
-      await frames(15);
+      await frames(6);
       const g = await st();
       camCheck('putting address', g, g.ball, { minUp: 0.6, maxUp: 2.5, maxDist: 4 });
       await capture(`h${hole + 1}-green`);
     }
     const first = s.strokes === 0;
-    const res = await playStroke(p, first ? { fast: false, shots: { mid: `h${hole + 1}-flight`, midFrames: 40, settle: `h${hole + 1}-settle` } } : { fast: true, shots: {} });
+    const res = await playStroke(p, first ? { fast: false, shots: { mid: `h${hole + 1}-flight`, midFrames: 12, settle: `h${hole + 1}-settle` } } : { fast: true, shots: {} });
     if (!res) break;
     if (first && res.restCam) camCheck('after the tee shot (settle view)', res.restCam, res.before.ball.y !== undefined ? res.restCam.ball : res.after.ball, { maxUp: 7, maxDist: 20 });
     await waitStanceOrWalk();
@@ -298,8 +301,8 @@ for (const [hi, hole] of holes.entries()) {
   await frames(6);
   await capture(`h${hole + 1}-holed`);
   // Scorecard appears, then Tab → next hole.
-  await until(() => !!document.querySelector('.scorecard, #scorecard, [data-scorecard]') || window.__game.mode !== 'holed', null, 400);
-  await frames(60);
+  // The scorecard appears 2.8 s (game time) after holing.
+  await frames(Math.ceil(3.2 / (0.05 * TIME_SCALE)));
   const rv = await page.evaluate(() => window.__game.round);
   const hs = rv.holes[hole];
   check(`hole ${hole + 1} on the scorecard`, hs.strokes === s.strokes, `card ${hs.strokes} (putts ${hs.putts}, pen ${hs.penalties}, fw ${hs.fairway}, gir ${hs.gir})`);

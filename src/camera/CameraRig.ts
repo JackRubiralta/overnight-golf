@@ -108,7 +108,8 @@ export class CameraRig {
     const ballUp = Math.max(0, ball.y - groundBall);
     const t = flightCamTarget(ball, this.flightDir, sp, ballUp, (x, z) => this.camGround(x, z));
     this.targetPos.copy(t);
-    this.targetLook.copy(ball);
+    // Aim a little below a high ball so the ground/horizon stays in view under it.
+    this.targetLook.copy(ball).addScaledVector(UP, -0.3 * ballUp);
     damp(this.pos, this.targetPos, 2.4, dt);
     this.keepAboveGround(1.0);
     damp(this.look, this.targetLook, 12, dt);
@@ -212,7 +213,8 @@ type GroundFn = (x: number, z: number) => number;
  * with the ball (≈40% of its height above the ground) and never far above the terrain.
  */
 export function flightCamTarget(ball: THREE.Vector3, dir: THREE.Vector3, horizSpeed: number, ballAboveGround: number, ground: GroundFn, out = new THREE.Vector3()) {
-  const back = Math.min(14, 6 + horizSpeed * 0.12);
+  // Further back while the ball is high so the view isn't a steep look up into the sky.
+  const back = Math.min(14, 6 + horizSpeed * 0.12) + Math.min(18, ballAboveGround * 0.5);
   out.copy(ball).addScaledVector(dir, -back);
   const g = ground(out.x, out.z);
   out.y = Math.max(g + 2.2 + Math.min(14, ballAboveGround * 0.4), g + 1.2);

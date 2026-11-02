@@ -53,6 +53,9 @@ export class World {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.domElement.id = 'game-canvas';
+    // Production builds skip the per-program status/info-log queries: each one is a synchronous
+    // GPU round trip that serialises shader compilation (perf: load time). Dev keeps the checks.
+    this.renderer.debug.checkShaderErrors = import.meta.env.DEV;
     canvasParent.appendChild(this.renderer.domElement);
 
     this.camera = new THREE.PerspectiveCamera(settings.get('fov'), 1, 0.1, this.quality.drawDistance);
@@ -263,7 +266,7 @@ export class World {
       for (const m of this.modules) {
         m.update?.(ctx);
         gpuSync(gl);
-        phase(`frame${this.syncFrames} update ${m.constructor.name}`);
+        phase(`frame${this.syncFrames} update ${moduleName(m)}`);
       }
       if (this.post) this.post.render(ctx);
       else this.renderer.render(this.scene, this.camera);

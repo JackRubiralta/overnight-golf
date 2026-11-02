@@ -26,7 +26,9 @@ const LOD_MIN_GAP = 200;
 /** Fraction of each LOD band used for morphing toward the next level. */
 const MORPH_FRACTION = 0.3;
 /** Levels that cast sun shadows (far levels are outside the shadow frustum anyway). */
-const SHADOW_LEVELS = 2;
+export const SHADOW_LEVELS = 2;
+/** Object layer of shadow-only meshes: the sun's shadow camera renders it, the views don't. */
+export const SHADOW_LAYER = 1;
 
 export interface ChunkInfo {
   i0: number;
@@ -130,39 +132,53 @@ export function morphWindows(sw: number[]): THREE.Vector2[] {
 /**
  * Per-frame chunk selection: frustum culling + LOD level from the nearest-point distance of
  * each chunk's AABB to the camera. Writes instance translations into the per-level meshes.
+ *
+ * Shadow casters are selected separately (perf): `shadowMeshes[k]` (drawn only in the sun's
+ * shadow pass, see SHADOW_LAYER) get the chunks of the shadow-casting levels that intersect the
+ * shadow camera's frustum, at the same LOD level the main view uses, so self-shadowing matches
+ * the visible surface. Previously every visible LOD0/LOD1 chunk (out to ~360 m) was drawn into
+ * a shadow map that only covers ±shadowDistance, and off-screen near chunks were drawn in the
+ * main pass too.
  */
 export class ChunkSelector {
   private frustum = new THREE.Frustum();
   private m = new THREE.Matrix4();
   private tmp = new THREE.Matrix4();
   switchDist: number[] = lodSwitchDistances(1);
-  /** Chunks closer than this are always kept (they may cast shadows into view). */
-  shadowKeep = 160;
+  /** Shadow-caster meshes per shadow-casting level (may be empty: then no shadow selection). */
+  shadowMeshes: THREE.InstancedMesh[] = [];
 
   constructor(private chunks: ChunkInfo[], private meshes: THREE.InstancedMesh[]) {}
 
-  update(camera: THREE.Camera) {
+  /** `shadowFrustum`: the sun shadow camera's frustum (null = no shadow casters this frame). */
+  update(camera: THREE.Camera, shadowFrustum: THREE.Frustum | null = null) {
     this.m.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(this.m);
     const counts = this.meshes.map(() => 0);
+    const sCounts = this.shadowMeshes.map(() => 0);
     const cam = camera.position;
     for (const c of this.chunks) {
       const d = c.box.distanceToPoint(cam);
       let level = 0;
       while (level < this.switchDist.length && d >= this.switchDist[level]) level++;
-      const inView = this.frustum.intersectsBox(c.box);
-      if (!inView && !(level < SHADOW_LEVELS && d < this.shadowKeep)) continue;
+      if (shadowFrustum && level < this.shadowMeshes.length && shadowFrustum.intersectsBox(c.box)) {
+        this.tmp.makeTranslation(c.origin.x, 0, c.origin.z);
+        this.shadowMeshes[level].setMatrixAt(sCounts[level]++, this.tmp);
+      }
+      if (!this.frustum.intersectsBox(c.box)) continue;
       const mesh = this.meshes[level];
       this.tmp.makeTranslation(c.origin.x, 0, c.origin.z);
       mesh.setMatrixAt(counts[level]++, this.tmp);
     }
-    this.meshes.forEach((mesh, k) => {
-      mesh.count = counts[k];
-      mesh.visible = counts[k] > 0;
+    const finish = (mesh: THREE.InstancedMesh, n: number) => {
+      mesh.count = n;
+      mesh.visible = n > 0;
       mesh.instanceMatrix.needsUpdate = true;
       mesh.instanceMatrix.clearUpdateRanges();
-      mesh.instanceMatrix.addUpdateRange(0, Math.max(1, counts[k]) * 16);
-    });
+      mesh.instanceMatrix.addUpdateRange(0, Math.max(1, n) * 16);
+    };
+    this.meshes.forEach((mesh, k) => finish(mesh, counts[k]));
+    this.shadowMeshes.forEach((mesh, k) => finish(mesh, sCounts[k]));
   }
 }
 

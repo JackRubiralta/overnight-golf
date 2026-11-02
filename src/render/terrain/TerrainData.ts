@@ -20,27 +20,44 @@ const CURV_LARGE = 12;
 export function bakeSlopeTexture(g: CourseGrids): THREE.DataTexture {
   const { res, heights } = g;
   const cell = (2 * g.half) / (res - 1);
-  const H = (i: number, j: number) => {
-    i = i < 0 ? 0 : i >= res ? res - 1 : i;
-    j = j < 0 ? 0 : j >= res ? res - 1 : j;
-    return heights[j * res + i];
-  };
   const out = new Uint16Array(res * res * 4);
   const half = THREE.DataUtils.toHalfFloat;
-  const lap = (i: number, j: number, r: number) => {
-    const h = H(i, j);
-    // 8-neighbour Laplacian at radius r (metres^-1): + = concave (hollow), - = convex (ridge).
-    const s = H(i + r, j) + H(i - r, j) + H(i, j + r) + H(i, j - r);
-    const d = H(i + r, j + r) + H(i - r, j - r) + H(i - r, j + r) + H(i + r, j - r);
-    return (0.5 * s + 0.25 * d - 3 * h) / (r * cell * r * cell) * 4;
-  };
-  for (let j = 0; j < res; j++) {
+  // Clamped row/column offsets for every radius used (perf: no per-sample clamping/closures;
+  // this bake runs on the main thread during loading, 1281² texels).
+  const radii = [1, CURV_SMALL, CURV_LARGE];
+  const clampIdx = (v: number) => (v < 0 ? 0 : v >= res ? res - 1 : v);
+  const lo: Record<number, Int32Array> = {};
+  const hi: Record<number, Int32Array> = {};
+  for (const r of radii) {
+    lo[r] = new Int32Array(res);
+    hi[r] = new Int32Array(res);
     for (let i = 0; i < res; i++) {
-      const k = (j * res + i) * 4;
-      out[k] = half((H(i + 1, j) - H(i - 1, j)) / (2 * cell));
-      out[k + 1] = half((H(i, j + 1) - H(i, j - 1)) / (2 * cell));
-      out[k + 2] = half(Math.max(-8, Math.min(8, lap(i, j, CURV_SMALL) * 10)));
-      out[k + 3] = half(Math.max(-8, Math.min(8, lap(i, j, CURV_LARGE) * 40)));
+      lo[r][i] = clampIdx(i - r);
+      hi[r][i] = clampIdx(i + r);
+    }
+  }
+  const inv2c = 1 / (2 * cell);
+  // 8-neighbour Laplacian at radius r (metres^-1): + = concave (hollow), - = convex (ridge).
+  const lap = (i: number, j: number, r: number, h: number) => {
+    const i0 = lo[r][i], i1 = hi[r][i];
+    const r0 = lo[r][j] * res, r1 = hi[r][j] * res, rj = j * res;
+    const s = heights[rj + i1] + heights[rj + i0] + heights[r1 + i] + heights[r0 + i];
+    const d = heights[r1 + i1] + heights[r0 + i0] + heights[r1 + i0] + heights[r0 + i1];
+    return ((0.5 * s + 0.25 * d - 3 * h) / (r * cell * r * cell)) * 4;
+  };
+  const clamp8 = (v: number) => (v < -8 ? -8 : v > 8 ? 8 : v);
+  const l1 = lo[1], h1 = hi[1];
+  for (let j = 0; j < res; j++) {
+    const rj = j * res;
+    const rUp = h1[j] * res;
+    const rDn = l1[j] * res;
+    for (let i = 0; i < res; i++) {
+      const k = (rj + i) * 4;
+      const h = heights[rj + i];
+      out[k] = half((heights[rj + h1[i]] - heights[rj + l1[i]]) * inv2c);
+      out[k + 1] = half((heights[rUp + i] - heights[rDn + i]) * inv2c);
+      out[k + 2] = half(clamp8(lap(i, j, CURV_SMALL, h) * 10));
+      out[k + 3] = half(clamp8(lap(i, j, CURV_LARGE, h) * 40));
     }
   }
   const tex = new THREE.DataTexture(out, res, res, THREE.RGBAFormat, THREE.HalfFloatType);

@@ -36,6 +36,12 @@ describe('camera targets', () => {
     const apex = flightCamTarget(new Vector3(0, 30, -120), dir, 40, 30, flat);
     expect(apex.y).toBeLessThan(20);
     expect(apex.y).toBeGreaterThan(8);
+    // The ball stays inside a 55° vertical FOV when the camera aims 30% of its height below it.
+    const ballP = new Vector3(0, 30, -120);
+    const look = ballP.clone().setY(30 - 0.3 * 30);
+    const ang = (p: Vector3) => Math.atan2(p.y - apex.y, Math.hypot(p.x - apex.x, p.z - apex.z));
+    expect((ang(ballP) - ang(look)) * 57.3).toBeLessThan(25);
+    expect(ang(look) * 57.3).toBeLessThan(25); // horizon still on screen
     const landing = flightCamTarget(new Vector3(0, 0.5, -220), dir, 20, 0.5, flat);
     expect(landing.y).toBeLessThan(3);
     expect(landing.z).toBeGreaterThan(-220);

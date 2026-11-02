@@ -39,7 +39,8 @@ interface RingDef {
 }
 const RINGS: RingDef[] = [
   { outer: 0.085, density: 4, tuft: 4, width: 1, rows: [0, 0.22, 0.44, 0.64, 0.82], facing: 0 },
-  { outer: 0.24, density: 1, tuft: 4, width: 1, rows: [0, 0.22, 0.44, 0.64, 0.82], facing: 0 },
+  // perf: 4 rows (7 triangles) instead of ring 0's 5 rows (9) — the bend still reads at 5–13 m
+  { outer: 0.24, density: 1, tuft: 4, width: 1, rows: [0, 0.3, 0.58, 0.82], facing: 0 },
   { outer: 0.58, density: 1 / 4, tuft: 2, width: 2.0, rows: [0, 0.35, 0.65, 0.85], facing: 0.35 },
   { outer: 1, density: 1 / 16, tuft: 2, width: 3.5, rows: [0, 0.5, 0.78], facing: 0.7 },
 ];
