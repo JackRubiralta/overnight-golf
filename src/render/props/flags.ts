@@ -18,9 +18,11 @@ import { FLAG_COLORS, flagCellUV } from './textures';
 
 /** Tunables */
 export const PIN_HEIGHT = 2.13; // 7 ft flagstick
-export const PIN_RADIUS = 0.0125;
-const FLAG_W = 0.5;
-const FLAG_H = 0.34;
+export const PIN_RADIUS = 0.0125; // collision radius (real 1" stick)
+/** Drawn a little fatter than real so the stick stays readable (≥1 px) at approach distances. */
+const STICK_VIS_RADIUS = 0.018;
+const FLAG_W = 0.56;
+const FLAG_H = 0.38;
 const CUP_DEPTH = 0.1;
 const CUP_OUTER = 0.085; // disc radius incl. the darkened cut edge
 const PRACTICE_PIN_HEIGHT = 0.9;
@@ -242,7 +244,7 @@ export class FlagSet {
       if (!spec.noFlag) {
         const cell = flagCellUV(spec.cell);
         const fg = new THREE.PlaneGeometry(FLAG_W, FLAG_H, 16, 6);
-        fg.translate(FLAG_W / 2 + PIN_RADIUS, -FLAG_H / 2, 0);
+        fg.translate(FLAG_W / 2 + STICK_VIS_RADIUS, -FLAG_H / 2, 0);
         const uv = fg.getAttribute('uv') as THREE.BufferAttribute;
         for (let k = 0; k < uv.count; k++) uv.setXY(k, cell[0] + uv.getX(k) * (cell[2] - cell[0]), cell[1] + uv.getY(k) * (cell[3] - cell[1]));
         this.flagGeos.push(fg);
@@ -307,7 +309,7 @@ export class FlagSet {
         const dx = Math.cos(ang) * 0.35;
         const dz = -Math.sin(ang) * 0.35;
         const gy = this.course.height(p.base.x + dx, p.base.z + dz);
-        this.v.set(p.base.x + dx, gy + PIN_RADIUS + 0.004, p.base.z + dz);
+        this.v.set(p.base.x + dx, gy + STICK_VIS_RADIUS + 0.004, p.base.z + dz);
         this.s.set(1, p.height, 1);
         this.m.compose(this.v, this.q, this.s);
         this.sticks.setMatrixAt(i, this.m);
@@ -379,10 +381,11 @@ function buildStickGeometry(): THREE.BufferGeometry {
     g.translate(0, (y0 + y1) / 2, 0);
     parts.push({ g, c });
   };
-  add(PIN_RADIUS, PIN_RADIUS, 0, 0.8, '#f4f2ec');
-  add(PIN_RADIUS, PIN_RADIUS, 0.8, 0.86, FLAG_COLORS.cloth);
-  add(PIN_RADIUS, PIN_RADIUS, 0.86, 0.995, '#f4f2ec');
-  add(PIN_RADIUS * 1.1, PIN_RADIUS * 0.6, 0.995, 1.0, '#c9a446');
+  const r = STICK_VIS_RADIUS;
+  add(r, r, 0, 0.8, '#f4f2ec');
+  add(r, r, 0.8, 0.86, FLAG_COLORS.cloth);
+  add(r, r, 0.86, 0.995, '#f4f2ec');
+  add(r * 1.1, r * 0.6, 0.995, 1.0, '#c9a446');
   // The scale is non-uniform (y = height), so the radius stays in metres.
   const pos: number[] = [];
   const nor: number[] = [];
