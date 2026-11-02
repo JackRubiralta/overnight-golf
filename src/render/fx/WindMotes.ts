@@ -18,8 +18,9 @@ const MIN_DRIFT = 0.35;
 const MIN_H = 0.25;
 const MAX_H = 7.0;
 /** Size range (m) of pollen and of the rarer fluffy seeds. */
-const POLLEN_SIZE = 0.018;
-const FLUFF_SIZE = 0.05;
+const POLLEN_SIZE = 0.012;
+// (kept well below golf-ball size so a backlit mote is never mistaken for the ball)
+const FLUFF_SIZE = 0.028;
 const FLUFF_FRACTION = 0.12;
 
 const f = (n: number) => n.toFixed(4);
@@ -48,7 +49,7 @@ void main() {
   gl_Position = projectionMatrix * mv;
   float size = mix(${f(POLLEN_SIZE)}, ${f(FLUFF_SIZE)}, fluff) * (0.7 + 0.6 * fract(s * 3.7));
   float px = size * uScreenScale / max(-mv.z, 0.05);
-  gl_PointSize = clamp(px, 1.0, 24.0);
+  gl_PointSize = clamp(px, 1.0, 9.0);
   // Fade at the box edges (no popping when wrapping) and with distance; sub-pixel → fade.
   float edge = 1.0 - smoothstep(0.36, 0.5, max(abs(rel.x), abs(rel.y)) / ${f(BOX)});
   float d = length(wp - cameraPosition);

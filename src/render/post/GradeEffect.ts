@@ -1,6 +1,6 @@
 /**
  * Display-referred colour grade, applied right after tone mapping (inputs are 0..1 linear):
- * split toning (cool shadows / warm highlights), gentle contrast around mid-grey in a
+ * split toning (cool shadows / warm highlights), a foliage hue grade, gentle contrast around mid-grey in a
  * perceptual space, vibrance-style saturation lift, and a soft elliptical vignette.
  */
 import * as THREE from 'three';
@@ -14,6 +14,8 @@ uniform float uSaturation;
 uniform float uVibrance;
 uniform float uVignette;
 uniform float uVignetteSoftness;
+uniform float uGreenWarm;
+uniform float uGreenDesat;
 
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 
@@ -26,6 +28,11 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   float hi = smoothstep(0.45, 0.95, pl);
   g *= mix(vec3(1.0), uShadowTint, sh);
   g *= mix(vec3(1.0), uHighlightTint, hi);
+  // Foliage hue grade (film-style): push dominant greens slightly toward yellow and take a little
+  // saturation out of them, so sunlit turf reads as grass rather than neon lime.
+  float gm = smoothstep(0.02, 0.22, g.g - max(g.r, g.b));
+  g.r += (g.g - g.r) * uGreenWarm * gm;
+  g = mix(vec3(dot(g, LUMA)), g, 1.0 - uGreenDesat * gm);
   // contrast pivoting on mid grey, with a soft shoulder so highlights don't clip
   g = clamp((g - 0.46) * uContrast + 0.46, 0.0, 1.0);
   // saturation + vibrance (boost muted colours more than already saturated ones)
@@ -51,6 +58,10 @@ export interface GradeOptions {
   vibrance?: number;
   vignette?: number;
   vignetteSoftness?: number;
+  /** Shift of dominant greens toward yellow (0..1). */
+  greenWarm?: number;
+  /** Extra desaturation of dominant greens (0..1). */
+  greenDesat?: number;
 }
 
 export class GradeEffect extends Effect {
@@ -65,6 +76,8 @@ export class GradeEffect extends Effect {
         ['uVibrance', new THREE.Uniform(o.vibrance ?? 0.18)],
         ['uVignette', new THREE.Uniform(o.vignette ?? 0.22)],
         ['uVignetteSoftness', new THREE.Uniform(o.vignetteSoftness ?? 0.55)],
+        ['uGreenWarm', new THREE.Uniform(o.greenWarm ?? 0.12)],
+        ['uGreenDesat', new THREE.Uniform(o.greenDesat ?? 0.24)],
       ]),
     });
   }

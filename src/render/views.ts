@@ -32,6 +32,12 @@ export function viewPreset(name: string, course: Course): ViewDef | null {
     case 'wide': {
       return { pos: at(-250, 520, 150), look: at(-40, -60, 0) };
     }
+    case 'pond': {
+      // Hero shot of hole 3's mere from the fairway just short of it, looking across the water to
+      // the green (the 'water' view from the raised tee cannot see the pond past the tee crest).
+      const w = h3.water[0].blobs[0].c;
+      return { pos: at(w[0] + 15, w[1] + 45, 2.4), look: at(h3.green.c[0], h3.green.c[1], 0.5) };
+    }
     case 'grass': {
       const p = h1.fairway[1];
       return { pos: at(p[0] + 16, p[1], 0.6), look: at(p[0] + 30, p[1] - 12, 0.2) };

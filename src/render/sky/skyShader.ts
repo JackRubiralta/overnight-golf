@@ -151,6 +151,10 @@ void main() {
   if (dir.y < 0.0) haze = 1.0;
   vec3 fogTint = tlFogTint(dir, uFogColor, sunDir, uFogSunColor);
   col = mix(col, fogTint, haze);
+  // Below the horizon (beyond the far ring / draw distance, e.g. from high overview cameras) we
+  // would be looking at very distant, heavily hazed land, not at more sky: a slightly darker,
+  // greener haze so no bright flat "sea" band shows between the last ridgeline and the sky.
+  col *= mix(vec3(1.0), vec3(0.74, 0.8, 0.74), smoothstep(0.0, -0.025, dir.y));
 
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>

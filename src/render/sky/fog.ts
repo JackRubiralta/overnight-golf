@@ -24,7 +24,7 @@ export const fogShared = {
   sunDir: { x: 0, y: 1, z: 0 } as V3,
   sunColor: { x: 1, y: 0.9, z: 0.7 } as V3,
   /** x: height falloff (1/m), y: fog base height (m), z: near ramp distance (m), w: haze floor (0..1). */
-  params: { x: 1 / 140, y: 0, z: 350, w: 0.22 } as V4,
+  params: { x: 1 / 140, y: 0, z: 500, w: 0.16 } as V4,
 };
 
 /**
