@@ -30,7 +30,7 @@ const g = () => page.evaluate(() => {
 // Wait until the game has rendered n more frames (headless software rendering can be slow).
 const frames = async (n = 2) => {
   const f0 = await page.evaluate(() => window.__game.frames);
-  await page.waitForFunction((t) => window.__game.frames >= t, f0 + n, { timeout: 120000, polling: 50 });
+  await page.waitForFunction((t) => window.__game.frames >= t, f0 + n, { timeout: 900000, polling: 50 });
 };
 const tap = async (key, times = 1) => {
   for (let i = 0; i < times; i++) {
@@ -155,7 +155,7 @@ if (started) {
   const r = s.report;
   check('shot produces a shot report', !!r, r ? `${r.club} ${r.clubSpeedMph.toFixed(0)} mph, ${r.quality}, carry ${(r.carry / 0.9144).toFixed(0)} yd, total ${(r.total / 0.9144).toFixed(0)} yd, offline ${(r.offline / 0.9144).toFixed(1)} yd, result ${r.result}` : 'none');
   check('stroke counted', s.strokes >= 1, `strokes=${s.strokes}`);
-  await frames(20);
+  await frames(4);
   await capture('screenshots/_tmp/e2e-after.png');
 }
 const uniq = [...new Set(errors)];
