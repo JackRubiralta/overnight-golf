@@ -13,7 +13,7 @@ const oak = (name: string, seed: number, trunk: number, spread: number): Species
   barkTile: [0.9, 1.6],
   leafTint: [0.95, 1.0, 0.85],
   tintJitter: 0.12,
-  barkTint: [1, 1, 1],
+  barkTint: [0.72, 0.68, 0.66],
   lod1MinRadius: 0.05,
   lod1LeafStep: 3,
   levels: [

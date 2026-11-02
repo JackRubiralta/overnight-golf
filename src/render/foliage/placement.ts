@@ -193,7 +193,7 @@ export function placeFoliage(course: Course, seed = 2024): PlacementResult {
       // Beyond the holes, budgets keep whole stands (clumpiest ground first) instead of thinning
       // everything evenly: woods + open meadows rather than a savanna. Rim woods get a boost.
       const stand = vnoise(x / 110, z / 110, 41) * 0.7 + vnoise(x / 37, z / 37, 42) * 0.3;
-      const rimBoost = Math.max(Math.abs(x), Math.abs(z)) > 600 ? 0.25 : 0;
+      const rimBoost = Math.max(Math.abs(x), Math.abs(z)) > 600 ? 0.12 : 0;
       trees.push({ x, z, y: groundY(x, z, 0.5 * scale) - 0.12, yaw: rng.next() * Math.PI * 2, scale, variant, r, rank: inPlay ? r * 0.01 : 0.01 + (1 - stand) - rimBoost + r * 0.12 + (corr - IN_PLAY) / 250 });
     }
   }

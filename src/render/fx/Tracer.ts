@@ -16,8 +16,8 @@ import { FX_GLSL, fxUniforms } from './common';
 export const TRACER_MAX_POINTS = 1024;
 /** New point when the ball moved this far from the last fixed point (m). */
 const MIN_SPACING = 0.6;
-/** Ribbon half-width as a fraction of the screen height (≈6 px at 1080p), and the minimum physical half-width (m). */
-const HALF_WIDTH_FRAC = 0.0055;
+/** Ribbon half-width as a fraction of the screen height (≈7 px at 1080p), and the minimum physical half-width (m). */
+const HALF_WIDTH_FRAC = 0.0065;
 const MIN_HALF_WIDTH = 0.03;
 /** Seconds a finished tracer stays at full strength, and the total fade time. */
 export const TRACER_HOLD = 2.0;
@@ -65,8 +65,8 @@ void main() {
   float launch = smoothstep(0.0, 2.5, vU);
   // gentle shimmer travelling along the path
   float shimmer = 0.88 + 0.12 * sin(vU * 0.35 - uTime * 6.0);
-  vec3 hot = mix(uColor, vec3(1.0), 0.35);
-  vec3 col = (uColor * glow * 1.8 + hot * core * 1.0) * shimmer + vec3(1.0, 0.97, 0.92) * core * 2.2 * head;
+  vec3 hot = mix(uColor, vec3(1.0), 0.15);
+  vec3 col = (uColor * glow * 2.6 + hot * core * 0.9) * shimmer + vec3(1.0, 0.97, 0.92) * core * 2.4 * head;
   float a = uAlpha * launch * (1.0 - 0.85 * fxFog(vDist));
   gl_FragColor = vec4(col * ${INTENSITY.toFixed(2)}, clamp(a, 0.0, 1.0)); // additive: src * alpha
   #include <tonemapping_fragment>

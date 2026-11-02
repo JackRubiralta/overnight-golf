@@ -35,7 +35,7 @@ export class BallVisual {
       clearcoat: 0.7,
       clearcoatRoughness: 0.12,
       normalMap: normal,
-      normalScale: new THREE.Vector2(0.9, 0.9),
+      normalScale: new THREE.Vector2(0.65, 0.65),
       emissive: '#ffffff',
       emissiveIntensity: 0.04,
     });

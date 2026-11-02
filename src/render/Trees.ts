@@ -81,6 +81,11 @@ const rangeIn = (a: number, b: number) => [a * (1 - BAND), a * (1 + BAND), b * (
 
 export class Foliage implements RenderModule {
   colliders: TreeCollider[] = [];
+  /**
+   * Called after a quality change rebuilt `colliders` in place (trees within 50 m of the maintained
+   * turf never change; only far woods are thinned). Wire to Props.setTreeColliders to resync.
+   */
+  onCollidersChanged: ((c: TreeCollider[]) => void) | null = null;
   group = new THREE.Group();
   /** Build time of the last init (ms), for budgets. */
   buildMs = 0;
@@ -257,6 +262,7 @@ export class Foliage implements RenderModule {
   setQuality(q: QualityPreset) {
     if (!this.placed) return;
     this.applyQuality(q);
+    this.onCollidersChanged?.(this.colliders);
   }
 
   dispose() {

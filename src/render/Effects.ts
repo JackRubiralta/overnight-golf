@@ -26,8 +26,8 @@ export type TracerStyle = 'draw' | 'fade' | 'straight';
 // ---- tuning -------------------------------------------------------------------------------
 /** Tracer colours (linear, pre-intensity). */
 const TRACER_COLORS: Record<TracerStyle, THREE.Color> = {
-  draw: new THREE.Color(0.25, 0.6, 1.0),
-  fade: new THREE.Color(1.0, 0.45, 0.12),
+  draw: new THREE.Color(0.12, 0.42, 1.0),
+  fade: new THREE.Color(1.0, 0.36, 0.06),
   straight: new THREE.Color(0.95, 0.93, 0.9),
 };
 /** Number of ribbons (current + ghosts) and the dimming of ghosts once a newer shot starts. */

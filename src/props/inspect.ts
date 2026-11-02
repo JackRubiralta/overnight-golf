@@ -5,6 +5,7 @@
  *   shoot=x,z,tx,tz,speed,loft    fire a ball from (x,z) toward (tx,tz) through BallSim + Props
  *   sim=seconds                   physics time to advance (fixed 1/60 steps) before rendering
  *   flagout=1                     pull the hole-1 flag
+ *   ball=x,z                      place the ball on the ground
  * Sets window.__ready after a few rendered frames; window.__hits lists prop-hit events.
  */
 import * as THREE from 'three';
@@ -47,6 +48,11 @@ async function run() {
   const log = (m: string) => console.log(`[inspect] ${m} @${Math.round(performance.now() - T0)}ms`);
   await mods.props.physicsReady;
   log('physics ready');
+  const ballAt = p.get('ball');
+  if (ballAt) {
+    const [bx, bz] = ballAt.split(',').map(Number);
+    mods.props.setBall(new THREE.Vector3(bx, course.height(bx, bz) + 0.0214, bz));
+  }
   const shoot = p.get('shoot');
   const ctx = (dt: number): FrameContext => ({ time: world.time, dt, camera: world.camera, renderer: world.renderer, scene: world.scene, course, quality: world.quality, hole: 0, mode: 'flight' });
   if (shoot) {

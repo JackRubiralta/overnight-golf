@@ -263,7 +263,7 @@ void grassVertex(out vec3 outPos, out vec3 outN) {
   col *= mix(1.08 + (r2 - 0.5) * mownVar, 0.62 + 0.75 * r2 * r2 + 0.2 * r7, longness);
   col = mix(col, col * vec3(1.22, 1.04, 0.62), r4 * longness);
   col = mix(col, col * vec3(0.82, 0.98, 1.12), step(r8, 0.22) * longness);
-  float dry = step(1.0 - mix(0.03, 0.2, wDeep) * longness, r6);
+  float dry = step(1.0 - mix(0.03, 0.14, wDeep) * longness, r6);
   col = mix(col, vec3(0.15, 0.135, 0.065), dry * 0.75);
   // Root → tip gradient: tips are lighter and warmer.
   vec3 tip = col * mix(1.2, 1.45, longness) * mix(vec3(1.0), vec3(1.08, 1.0, 0.8), longness);
@@ -275,7 +275,7 @@ void grassVertex(out vec3 outPos, out vec3 outN) {
   // Ambient occlusion at the root (deeper in long, dense grass).
   float aoBase = mix(0.88, mix(0.4, 0.25, wDeep * clump), longness);
   vGrassAO = mix(aoBase, 1.0, smoothstep(0.0, 0.85, t));
-  vGrassTrans = mix(0.3, 0.85, longness) * smoothstep(0.05, 0.6, t) * (1.0 - 0.6 * farK);
+  vGrassTrans = mix(0.2, 0.85, longness) * smoothstep(0.05, 0.6, t) * (1.0 - 0.6 * farK);
 }
 `;
 

@@ -107,6 +107,37 @@ export function buildClubhouse(course: Course, cx: number, cz: number, yaw: numb
     b.box('stone', 0.36, 0.14, z1 - z0 + 0.1, mat(x0 + 0.13, -0.07, (z0 + z1) / 2), COPING);
     b.box('stone', 0.36, 0.14, z1 - z0 + 0.1, mat(x1 - 0.13, -0.07, (z0 + z1) / 2), COPING);
     box('clubhouse', (x0 + x1) / 2, -plinthDepth / 2, (z0 + z1) / 2, (x1 - x0) / 2, plinthDepth / 2, (z1 - z0) / 2);
+    // Pilasters and cellar vents break up the podium where the ground falls away.
+    const sides: { a: [number, number]; b: [number, number]; n: [number, number]; yaw: number }[] = [
+      { a: [x0, z1], b: [x1, z1], n: [0, 1], yaw: 0 },
+      { a: [x0, z0], b: [x0, z1], n: [-1, 0], yaw: -Math.PI / 2 },
+      { a: [x1, z0], b: [x0, z0], n: [0, -1], yaw: Math.PI },
+      { a: [x1, z1], b: [x1, z0], n: [1, 0], yaw: Math.PI / 2 },
+    ];
+    for (const sd of sides) {
+      const len = Math.hypot(sd.b[0] - sd.a[0], sd.b[1] - sd.a[1]);
+      const n = Math.max(2, Math.round(len / 3.4));
+      for (let i = 0; i <= n; i++) {
+        const t = i / n;
+        const x = sd.a[0] + (sd.b[0] - sd.a[0]) * t + sd.n[0] * 0.08;
+        const z = sd.a[1] + (sd.b[1] - sd.a[1]) * t + sd.n[1] * 0.08;
+        const gl = groundLocal(x, z);
+        if (gl > -0.5) continue;
+        const h = -gl + 0.5;
+        b.box('stone', 0.55, h, 0.2, mat(x, -h / 2 - 0.15, z, 0, sd.yaw), COPING);
+        // Vent between this pilaster and the next, if the wall is tall enough there.
+        if (i < n) {
+          const tm = (i + 0.5) / n;
+          const vx = sd.a[0] + (sd.b[0] - sd.a[0]) * tm + sd.n[0] * 0.02;
+          const vz = sd.a[1] + (sd.b[1] - sd.a[1]) * tm + sd.n[1] * 0.02;
+          if (groundLocal(vx, vz) < -1.5) {
+            b.box('paint', 0.9, 0.55, 0.06, mat(vx, -0.75, vz, 0, sd.yaw), '#17130f');
+            b.box('stone', 1.1, 0.14, 0.12, mat(vx, -0.42, vz, 0, sd.yaw), COPING);
+            for (let k = -1; k <= 1; k++) b.box('iron', 0.03, 0.55, 0.05, mat(vx + Math.cos(sd.yaw) * k * 0.25, -0.75, vz - Math.sin(sd.yaw) * k * 0.25, 0, sd.yaw), '#2a2a2a');
+          }
+        }
+      }
+    }
   }
 
   // ── Main range ──

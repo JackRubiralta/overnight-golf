@@ -76,14 +76,15 @@ export function buildRock(p: RockParams, detail: number): THREE.BufferGeometry {
     const ny = nrm.getY(i);
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
     const grain = fbm3(x * 6, y * 6, z * 6, 2, p.seed + 11) * 0.5 + 0.5;
-    const base = 0.3 + 0.12 * grain;
-    let c = [base * 1.02, base * 0.99, base * 0.94];
+    // Linear albedo (vertex colours are linear): weathered grey-brown stone.
+    const base = 0.13 + 0.07 * grain;
+    let c = [base * 1.04, base * 1.0, base * 0.92];
     // Crevices darker.
     const cav = THREE.MathUtils.clamp(0.5 - disp[i] * 2, 0, 1);
     c = c.map((k) => k * (1 - 0.35 * cav));
     // Moss/lichen on upward faces.
     const moss = THREE.MathUtils.smoothstep(ny + 0.25 * (fbm3(x * 2, y * 2, z * 2, 2, p.seed + 17)), 0.55, 0.85);
-    const mc = [0.16, 0.2, 0.07];
+    const mc = [0.045, 0.07, 0.018];
     c = c.map((k, j) => k * (1 - moss * 0.75) + mc[j] * moss * 0.75);
     // Damp, darker foot.
     const foot = THREE.MathUtils.smoothstep(y, 0.0, 0.4);
