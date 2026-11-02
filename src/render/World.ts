@@ -289,9 +289,9 @@ export class World {
    * breakdown (main, shadow, sky = cloud cube, water = planar reflection, post, …), memory,
    * timings and the active preset.
    */
-  stats(): FrameStatsSnapshot & { preset: string; pixelRatio: number; size: [number, number] } {
+  stats(): FrameStatsSnapshot & { preset: string; pixelRatio: number; size: [number, number]; budget: { calls: number; triangles: number } } {
     const s = this.renderer.getDrawingBufferSize(_size);
-    return { ...this.perf.snapshot(), preset: this.quality.level, pixelRatio: this.renderer.getPixelRatio(), size: [s.x, s.y] };
+    return { ...this.perf.snapshot(), preset: this.quality.level, pixelRatio: this.renderer.getPixelRatio(), size: [s.x, s.y], budget: PERF_BUDGETS[this.quality.level] };
   }
 }
 
