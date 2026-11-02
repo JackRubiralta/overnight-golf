@@ -159,7 +159,7 @@ export class SkySystem implements RenderModule {
     }
 
     // Fog (scene FogExp2 + our height/aerial extension + sky haze copy)
-    const fogDensity = p.fogDensity * w.fogDensity * Number(new URLSearchParams(location.search).get('fogmul') ?? 1); // TEMPDBG
+    const fogDensity = p.fogDensity * w.fogDensity;
     const fogColor = new THREE.Color(p.fog).lerp(overcast.clone().multiplyScalar(1.4), w.overcast);
     const fogSun = new THREE.Color(p.fogSun).lerp(fogColor, w.overcast);
     let fog = scene.fog as THREE.FogExp2 | null;

@@ -98,7 +98,7 @@ export class Post implements PostPipeline {
 
     this.composer.addPass(this.renderPass);
 
-    if (q.ao && !location.search.includes('noao')) { // TEMPDBG
+    if (q.ao) {
       const ao = new N8AOPostPass(scene, camera, size.x, size.y);
       patchN8AO(ao); // must precede halfRes = true (three r187 MRT API)
       ao.configuration.transparencyAware = false; // also disables per-frame scene traversal
@@ -124,7 +124,7 @@ export class Post implements PostPipeline {
       });
       effects.push(this.dof);
     }
-    if (q.bloom && !location.search.includes('nobloom')) { // TEMPDBG
+    if (q.bloom) {
       this.bloom = new BloomEffect({
         mipmapBlur: true,
         luminanceThreshold: BLOOM.threshold,

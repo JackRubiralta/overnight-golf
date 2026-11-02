@@ -63,10 +63,10 @@ export const TIME_PRESETS: Record<Settings['timeOfDay'], TimePreset> = {
   noon: {
     elevation: 62, azimuth: 170, turbidity: 2.6, rayleigh: 1.0, mieCoefficient: 0.003, mieDirectionalG: 0.78, skyIntensity: 1.0,
     sunColor: 0xfffaf2, sunIntensity: 3.4, sunDiscColor: 0xffffff, sunDiscIntensity: 80,
-    hemiSky: 0xc8dcff, hemiGround: 0x5b6b3c, hemiIntensity: 0.4, envIntensity: 0.7,
+    hemiSky: 0xc8dcff, hemiGround: 0x5b6b3c, hemiIntensity: 0.36, envIntensity: 0.62,
     fog: 0xc0d0e2, fogSun: 0xe9eef2, fogDensity: 0.0003, fogHeight: 180, skyHaze: 0.5,
     cloudLit: 0xffffff, cloudLitIntensity: 2.0, cloudShade: 0x9aa9c0, cloudShadeIntensity: 0.5, cloudCoverage: 0.4,
-    exposure: 0.82,
+    exposure: 0.64, // high sun: keep the turf from washing out to pastel mint
   },
   golden: {
     elevation: 12, azimuth: 242, turbidity: 4.0, rayleigh: 2.4, mieCoefficient: 0.004, mieDirectionalG: 0.82, skyIntensity: 1.0,
