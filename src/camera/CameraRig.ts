@@ -71,11 +71,8 @@ export class CameraRig {
     // Putting: straight down the line (the golfer stands left of it, out of the way).
     this.targetPos.copy(ball).addScaledVector(aimDir, -back).addScaledVector(right, putting ? 0.05 : -0.55).addScaledVector(UP, up);
     const g = this.camGround(this.targetPos.x, this.targetPos.z) + 0.6;
-    // On a bank the camera has to rise above its nominal height: raise the look point by the
-    // same amount so the ball keeps its place on screen (instead of sinking under the HUD).
-    const lift = Math.max(0, g - this.targetPos.y);
-    this.targetPos.y += lift;
-    this.targetLook.copy(ball).addScaledVector(aimDir, putting ? 6 : 12).addScaledVector(UP, (putting ? -0.3 : 0) + lift);
+    if (this.targetPos.y < g) this.targetPos.y = g;
+    addressLook(this.targetPos, ball, aimDir, putting, this.targetLook);
     damp(this.pos, this.targetPos, 6, dt);
     damp(this.look, this.targetLook, 6, dt);
     this.apply(dt);
@@ -266,4 +263,20 @@ export function settleCamTarget(ball: THREE.Vector3, dir: THREE.Vector3, close: 
   const g = ground(out.x, out.z);
   out.y = Math.max(g + up, ball.y + up * 0.6);
   return out;
+}
+
+/**
+ * Address-camera look point: along the aim line, pitched so the ball sits a fixed angle below
+ * the screen centre (≈13.7° full swing, ≈12.3° putting) whatever the camera height. On a bank the
+ * camera must rise above its nominal height; a fixed look point would then push the ball off the
+ * bottom of the screen.
+ */
+export function addressLook(cam: THREE.Vector3, ball: THREE.Vector3, aimDir: THREE.Vector3, putting: boolean, out = new THREE.Vector3()) {
+  const ahead = new THREE.Vector3().copy(ball).addScaledVector(aimDir, putting ? 6 : 12).sub(cam).setY(0);
+  if (ahead.lengthSq() < 1e-6) ahead.set(aimDir.x, 0, aimDir.z);
+  ahead.normalize();
+  const pitchBall = Math.atan2(ball.y - cam.y, Math.hypot(ball.x - cam.x, ball.z - cam.z));
+  const pitch = pitchBall + ((putting ? 12.3 : 13.7) * Math.PI) / 180;
+  const dist = putting ? 9 : 16;
+  return out.copy(cam).addScaledVector(ahead, Math.cos(pitch) * dist).addScaledVector(UP, Math.sin(pitch) * dist);
 }

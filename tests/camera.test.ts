@@ -47,3 +47,26 @@ describe('camera targets', () => {
     expect(landing.z).toBeGreaterThan(-220);
   });
 });
+
+describe('address camera framing', () => {
+  const angleBelow = (cam: Vector3, look: Vector3, ball: Vector3) => {
+    const d1 = look.clone().sub(cam).normalize();
+    const d2 = ball.clone().sub(cam).normalize();
+    return (Math.acos(Math.min(1, d1.dot(d2))) * 180) / Math.PI;
+  };
+  it('keeps the ball ~13° below centre on flat ground and when the camera is lifted by a bank', async () => {
+    const { addressLook } = await import('../src/camera/CameraRig');
+    const ball = new Vector3(0, 0.02, 0);
+    const aim = new Vector3(0, 0, -1);
+    for (const camY of [1.62, 3.5, 6]) {
+      const cam = new Vector3(-0.55, camY, 4.6);
+      const look = addressLook(cam, ball, aim, false);
+      const a = angleBelow(cam, look, ball);
+      expect(a).toBeGreaterThan(12);
+      expect(a).toBeLessThan(15.5);
+      expect(look.y).toBeLessThan(cam.y + 1); // never tilts up at the sky
+    }
+    const pc = new Vector3(0.05, 1.22, 3);
+    expect(angleBelow(pc, addressLook(pc, ball, aim, true), ball)).toBeLessThan(14);
+  });
+});
