@@ -377,8 +377,8 @@ export function adjust(s: Synth, out: AudioNode, kind: AdjustKind, soft: number)
       break;
     case 'club':
       // Clubs clinking in the bag.
-      s.modal(out, { t, f: 1900 * p, ratios: [1, 2.42, 3.71], decays: [0.07, 0.04, 0.025], gains: [1, 0.5, 0.3], g: 0.9 * g });
-      s.modal(out, { t: t + rand(0.05, 0.08), f: 2300 * p, ratios: [1, 2.42], decays: [0.04, 0.02], gains: [1, 0.4], g: 0.45 * g });
+      s.modal(out, { t, f: 1900 * p, ratios: [1, 2.42, 3.71], decays: [0.07, 0.04, 0.025], gains: [1, 0.5, 0.3], g: 0.6 * g });
+      s.modal(out, { t: t + rand(0.05, 0.08), f: 2300 * p, ratios: [1, 2.42], decays: [0.04, 0.02], gains: [1, 0.4], g: 0.3 * g });
       break;
   }
 }

@@ -58,6 +58,12 @@ const WHEEL_MIN_GAP_MS = 90;
 const LOCK_SPIKE_PX = 600;
 /** After a failed lock request, don't retry for this long (ms) — Chrome has a re-lock cooldown. */
 const LOCK_RETRY_MS = 400;
+/**
+ * A second tap of the same key before the next frame is carried over to the following frame so
+ * every tap counts — but only while it is this fresh (ms). On very slow frames (headless software
+ * rendering) older repeats are collapsed instead, so input never lags behind by seconds.
+ */
+const CARRY_MAX_MS = 150;
 /** Queue cap — if the game loop isn't running, older events are applied immediately. */
 const QUEUE_MAX = 128;
 /** Keys whose browser default is suppressed during play (scrolling, focus moves, quick find). */
@@ -161,6 +167,8 @@ export function padButtonLabel(i: number): string {
 interface QueuedEvent {
   code: string;
   down: boolean;
+  /** env.now() when the event arrived. */
+  at: number;
 }
 interface Capture {
   device: 'kbm' | 'pad';
@@ -507,10 +515,17 @@ export class Input {
 
   /** Poll gamepads and apply queued events; call at the start of each frame. */
   update() {
+    const now = this.env.now();
     let i = 0;
     for (; i < this.queue.length; i++) {
       const ev = this.queue[i];
-      if (ev.down && this.pressedC.has(ev.code)) break; // second tap this frame → next frame
+      if (ev.down && this.pressedC.has(ev.code)) {
+        if (now - ev.at < CARRY_MAX_MS) break; // second tap this frame → next frame
+        // Stale repeat on a very slow frame: collapse into the press already reported this frame
+        // (still held if it hasn't been released yet).
+        this.down.add(ev.code);
+        continue;
+      }
       this.applyEdge(ev.code, ev.down);
     }
     this.queue.splice(0, i);
@@ -536,7 +551,7 @@ export class Input {
   }
 
   private enqueue(code: string, isDown: boolean) {
-    this.queue.push({ code, down: isDown });
+    this.queue.push({ code, down: isDown, at: this.env.now() });
     if (this.queue.length > QUEUE_MAX) {
       // The game loop isn't consuming events (loading, hidden tab): fold the oldest in.
       const old = this.queue.splice(0, this.queue.length - QUEUE_MAX / 2);

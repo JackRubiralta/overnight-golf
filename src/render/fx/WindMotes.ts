@@ -52,7 +52,7 @@ void main() {
   // Fade at the box edges (no popping when wrapping) and with distance; sub-pixel → fade.
   float edge = 1.0 - smoothstep(0.36, 0.5, max(abs(rel.x), abs(rel.y)) / ${f(BOX)});
   float d = length(wp - cameraPosition);
-  vAlpha = edge * (1.0 - smoothstep(10.0, ${f(BOX * 0.5)}, d)) * clamp(px, 0.0, 1.0) * (0.55 + 0.45 * fluff);
+  vAlpha = edge * (1.0 - smoothstep(10.0, ${f(BOX * 0.5)}, d)) * clamp(px, 0.0, 1.0) * (0.4 + 0.2 * fluff);
   vec3 vd = (wp - cameraPosition) / max(d, 1e-3);
   vLight = fxLight(vd) * (1.0 + 1.5 * pow(max(dot(vd, uSunDir), 0.0), 12.0));
   vFluff = fluff;

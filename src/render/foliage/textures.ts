@@ -12,8 +12,8 @@ import { Rng, tileFbm, tileNoise } from './rng';
 // ---------------------------------------------------------------- tuning
 const LEAF_TILE = 512;
 const FLOWER_TILE = 256;
-const BARK_W = 256;
-const BARK_H = 512;
+const BARK_W = 128;
+const BARK_H = 256;
 
 /** Atlas tile indices (row-major, 2×2). */
 export const LEAF_TILE_INDEX = { broadleaf: 0, birch: 1, conifer: 2, shrub: 3 } as const;
@@ -25,13 +25,14 @@ type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 function makeCanvas(w: number, h: number): { ctx: Ctx2D; read: () => Uint8ClampedArray } {
   let ctx: Ctx2D | null = null;
   if (typeof OffscreenCanvas !== 'undefined') {
-    ctx = new OffscreenCanvas(w, h).getContext('2d') as OffscreenCanvasRenderingContext2D | null;
+    // willReadFrequently → CPU raster: no GPU round trips for thousands of small paths + readback.
+    ctx = new OffscreenCanvas(w, h).getContext('2d', { willReadFrequently: true }) as OffscreenCanvasRenderingContext2D | null;
   }
   if (!ctx) {
     const c = document.createElement('canvas');
     c.width = w;
     c.height = h;
-    ctx = c.getContext('2d')!;
+    ctx = c.getContext('2d', { willReadFrequently: true })!;
   }
   const c2 = ctx;
   return { ctx: c2, read: () => c2.getImageData(0, 0, w, h).data };
@@ -79,11 +80,11 @@ function toTexture(data: Uint8Array, w: number, h: number, srgb: boolean): THREE
 
 type LeafShape = 'ovate' | 'lobed' | 'birch';
 
-/** One leaf from its base at the origin pointing along +x. */
-function leafPath(ctx: Ctx2D, len: number, wid: number, shape: LeafShape) {
+/** One leaf from its base at the origin pointing along +x. `half`: only the lower half (shading). */
+function leafPath(ctx: Ctx2D, len: number, wid: number, shape: LeafShape, half = false) {
   ctx.beginPath();
   ctx.moveTo(0, 0);
-  const N = 18;
+  const N = 14;
   const upper: [number, number][] = [];
   for (let i = 1; i < N; i++) {
     const t = i / N;
@@ -93,33 +94,33 @@ function leafPath(ctx: Ctx2D, len: number, wid: number, shape: LeafShape) {
     else w = Math.pow(Math.sin(Math.PI * Math.pow(t, 0.8)), 0.9);
     upper.push([t * len, w * wid]);
   }
-  for (const p of upper) ctx.lineTo(p[0], -p[1]);
+  if (!half) for (const p of upper) ctx.lineTo(p[0], -p[1]);
   ctx.lineTo(len, 0);
   for (let i = upper.length - 1; i >= 0; i--) ctx.lineTo(upper[i][0], upper[i][1]);
   ctx.closePath();
 }
 
 function drawLeaf(ctx: Ctx2D, x: number, y: number, ang: number, len: number, wid: number, shape: LeafShape, fill: string, vein: string) {
-  ctx.save();
-  ctx.translate(x, y);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.translate(x + leafOrigin[0], y + leafOrigin[1]);
   ctx.rotate(ang);
   leafPath(ctx, len, wid, shape);
   ctx.fillStyle = fill;
   ctx.fill();
   // Light half / dark half gives each leaf a folded, 3D read.
-  ctx.save();
-  ctx.clip();
-  ctx.fillStyle = 'rgba(0,0,0,0.12)';
-  ctx.fillRect(0, 0, len, wid * 1.2);
-  ctx.restore();
+  leafPath(ctx, len, wid, shape, true);
+  ctx.fillStyle = 'rgba(0,0,0,0.13)';
+  ctx.fill();
   ctx.strokeStyle = vein;
   ctx.lineWidth = Math.max(1, wid * 0.08);
   ctx.beginPath();
   ctx.moveTo(0, 0);
   ctx.lineTo(len * 0.9, 0);
   ctx.stroke();
-  ctx.restore();
+  ctx.setTransform(1, 0, 0, 1, leafOrigin[0], leafOrigin[1]);
 }
+/** Tile origin of the sprite being drawn (drawLeaf resets the transform). */
+const leafOrigin: [number, number] = [0, 0];
 
 function stem(ctx: Ctx2D, pts: [number, number][], w0: number, w1: number, col: string) {
   ctx.strokeStyle = col;
@@ -167,13 +168,13 @@ function drawBroadleaf(ctx: Ctx2D, S: number, rng: Rng) {
           const dir = Math.atan2(t[i][1] - t[i - 1][1], t[i][0] - t[i - 1][0]);
           const ang = dir + (rng.next() < 0.5 ? -1 : 1) * rng.range(0.5, 1.2);
           const len = S * rng.range(0.13, 0.19);
-          const l = layer ? rng.range(0.27, 0.4) : rng.range(0.17, 0.25);
+          const l = layer ? rng.range(0.19, 0.29) : rng.range(0.12, 0.18);
           drawLeaf(ctx, p[0], p[1], ang, len, len * 0.36, 'lobed', hsl(rng.range(84, 104), rng.range(0.42, 0.58), l), hsl(80, 0.35, l + 0.1));
         }
       }
       const tip = t[t.length - 1];
       const dir = Math.atan2(tip[1] - t[t.length - 2][1], tip[0] - t[t.length - 2][0]);
-      drawLeaf(ctx, tip[0], tip[1], dir, S * 0.17, S * 0.06, 'lobed', hsl(rng.range(86, 100), 0.5, rng.range(0.3, 0.4)), hsl(80, 0.35, 0.45));
+      drawLeaf(ctx, tip[0], tip[1], dir, S * 0.17, S * 0.06, 'lobed', hsl(rng.range(86, 100), 0.5, rng.range(0.22, 0.3)), hsl(80, 0.35, 0.34));
     }
   }
 }
@@ -189,7 +190,7 @@ function drawBirch(ctx: Ctx2D, S: number, rng: Rng) {
         const dir = Math.atan2(t[i][1] - t[i - 1][1], t[i][0] - t[i - 1][0]);
         const ang = dir + (j % 2 ? 1 : -1) * rng.range(0.4, 1.1);
         const len = S * rng.range(0.07, 0.1);
-        const l = rng.range(0.28, 0.46);
+        const l = rng.range(0.2, 0.34);
         drawLeaf(ctx, t[i][0], t[i][1], ang, len, len * 0.42, 'birch', hsl(rng.range(72, 92), rng.range(0.45, 0.62), l), hsl(70, 0.4, l + 0.1));
       }
     }
@@ -243,7 +244,7 @@ function drawShrub(ctx: Ctx2D, S: number, rng: Rng) {
     const y = cy + Math.sin(a) * r * 0.95;
     const len = S * rng.range(0.07, 0.1);
     const depth = i / 150; // later = front = lighter
-    const l = 0.15 + 0.2 * depth + rng.range(-0.03, 0.04);
+    const l = 0.11 + 0.16 * depth + rng.range(-0.03, 0.03);
     drawLeaf(ctx, x, y, a + rng.sym(0.8), len, len * 0.45, 'ovate', hsl(rng.range(88, 112), rng.range(0.4, 0.55), l), hsl(85, 0.3, l + 0.08));
   }
 }
@@ -256,7 +257,9 @@ export function createLeafAtlas(seed = 7): THREE.DataTexture {
   const tiles: ((c: Ctx2D, s: number, r: Rng) => void)[] = [drawBroadleaf, drawBirch, drawConifer, drawShrub];
   tiles.forEach((fn, i) => {
     ctx.save();
-    ctx.translate((i % 2) * S, Math.floor(i / 2) * S);
+    leafOrigin[0] = (i % 2) * S;
+    leafOrigin[1] = Math.floor(i / 2) * S;
+    ctx.setTransform(1, 0, 0, 1, leafOrigin[0], leafOrigin[1]);
     ctx.beginPath();
     ctx.rect(0, 0, S, S);
     ctx.clip();
@@ -326,7 +329,9 @@ export function createFlowerAtlas(seed = 11): THREE.DataTexture {
   const rng = new Rng(seed);
   for (let i = 0; i < 4; i++) {
     ctx.save();
-    ctx.translate((i % 2) * S, Math.floor(i / 2) * S);
+    leafOrigin[0] = (i % 2) * S;
+    leafOrigin[1] = Math.floor(i / 2) * S;
+    ctx.setTransform(1, 0, 0, 1, leafOrigin[0], leafOrigin[1]);
     ctx.beginPath();
     ctx.rect(0, 0, S, S);
     ctx.clip();

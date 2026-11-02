@@ -46,7 +46,9 @@ export class CloudCube {
     });
     this.target.texture.name = 'CloudCube';
     this.material = createCloudMaterial(uniforms, steps);
-    this.mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), this.material);
+    const tri = new THREE.BufferGeometry();
+    tri.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
+    this.mesh = new THREE.Mesh(tri, this.material);
     this.mesh.frustumCulled = false;
     this.scene.add(this.mesh);
     this.cubeCam = new THREE.CubeCamera(0.1, 10, this.target);
@@ -89,8 +91,6 @@ export class CloudCube {
     renderer.xr.enabled = false;
     renderer.autoClear = false; // the box covers every texel with NoBlending
     this.cubeCam.position.copy(pos);
-    this.mesh.position.copy(pos);
-    this.mesh.scale.setScalar(4);
     if (full) {
       // replace, then accumulate a few jittered passes so the first frame is already smooth
       for (let i = 0; i <= WARMUP_PASSES; i++) {

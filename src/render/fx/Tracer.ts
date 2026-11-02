@@ -16,14 +16,14 @@ import { FX_GLSL, fxUniforms } from './common';
 export const TRACER_MAX_POINTS = 1024;
 /** New point when the ball moved this far from the last fixed point (m). */
 const MIN_SPACING = 0.6;
-/** Ribbon half-width in pixels, and the minimum physical half-width (m). */
-const HALF_WIDTH_PX = 5.5;
+/** Ribbon half-width as a fraction of the screen height (≈4.5 px at 1080p), and the minimum physical half-width (m). */
+const HALF_WIDTH_FRAC = 0.0042;
 const MIN_HALF_WIDTH = 0.03;
 /** Seconds a finished tracer stays at full strength, and the total fade time. */
 export const TRACER_HOLD = 2.0;
 export const TRACER_FADE = 10.0;
 /** Brightness multiplier (HDR, for bloom). */
-const INTENSITY = 2.2;
+const INTENSITY = 1.0;
 
 const VERT = /* glsl */ `
 ${FX_GLSL}
@@ -39,7 +39,7 @@ void main() {
   vec3 side = cross(aDir, toCam / max(d, 1e-4));
   float sl = length(side);
   side = sl > 1e-4 ? side / sl : vec3(0.0, 1.0, 0.0);
-  float w = max(${MIN_HALF_WIDTH.toFixed(4)}, d * uPixel * ${HALF_WIDTH_PX.toFixed(2)});
+  float w = max(${MIN_HALF_WIDTH.toFixed(4)}, d * uFovScale * ${HALF_WIDTH_FRAC.toFixed(5)});
   vec3 p = position + side * aSide * w;
   vSide = aSide;
   vU = aU;
@@ -65,7 +65,8 @@ void main() {
   float launch = smoothstep(0.0, 2.5, vU);
   // gentle shimmer travelling along the path
   float shimmer = 0.88 + 0.12 * sin(vU * 0.35 - uTime * 6.0);
-  vec3 col = uColor * (glow * 0.75 + core * 1.3) * shimmer + vec3(1.0, 0.98, 0.95) * core * (0.55 + 2.5 * head);
+  vec3 hot = mix(uColor, vec3(1.0), 0.55);
+  vec3 col = (uColor * glow * 1.1 + hot * core * 1.1) * shimmer + vec3(1.0, 0.97, 0.92) * core * 2.5 * head;
   float a = uAlpha * launch * (1.0 - 0.85 * fxFog(vDist));
   gl_FragColor = vec4(col * ${INTENSITY.toFixed(2)} * a, 1.0);
   #include <tonemapping_fragment>

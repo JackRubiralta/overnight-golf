@@ -209,7 +209,8 @@ export class Synth {
     else p.setValueAtTime(pk, t);
     if (hold > 0) p.setValueAtTime(pk, t + a + hold);
     p.setTargetAtTime(0, t + a + hold, Math.max(0.001, d));
-    return t + a + hold + d * 7 + 0.02;
+    // ≈ -60 dB for short voices; long rings (gongs) stop at ≈ -43 dB, already far below the mix.
+    return t + a + hold + d * (d > 0.8 ? 5 : 7) + 0.02;
   }
 
   /** Track a scheduled source for voice counting and cleanup. */

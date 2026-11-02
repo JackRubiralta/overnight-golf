@@ -113,12 +113,20 @@ export class Foliage implements RenderModule {
     ctx.scene.add(this.group);
     const L = LODS[ctx.quality.level];
 
+    const marks: string[] = [];
+    let tm = performance.now();
+    const mark = (name: string) => {
+      const now = performance.now();
+      marks.push(`${name} ${(now - tm).toFixed(0)}`);
+      tm = now;
+    };
     // ---- textures
     const leafAtlas = createLeafAtlas();
     const flowerAtlas = createFlowerAtlas();
     const bark: Record<BarkKind, BarkTextures> = { oak: createBarkTextures('oak', 3), birch: createBarkTextures('birch', 5), pine: createBarkTextures('pine', 7) };
     this.disposables.push(leafAtlas, flowerAtlas, ...Object.values(bark).flatMap((b) => [b.map, b.normalMap]));
 
+    mark('textures');
     // ---- species geometry
     this.variants = SPECIES.map((def) => {
       const sk = generateSkeleton(def);
@@ -127,6 +135,7 @@ export class Foliage implements RenderModule {
       return v;
     });
 
+    mark('geometry');
     // ---- impostor atlas (one row per variant)
     const baked = bakeImpostors(
       ctx.renderer,
@@ -141,11 +150,13 @@ export class Foliage implements RenderModule {
       L.impTile,
     );
     this.impFrames = baked.frames;
+    mark('impostors');
     this.disposables.push(baked.atlas.albedo, baked.atlas.normal);
 
     // ---- placement (all candidates, priority sorted; quality takes prefixes)
     this.placed = placeFoliage(ctx.course);
     const P = this.placed;
+    mark('placement');
 
     // ---- tree / shrub meshes (capacity = every placed instance of the variant)
     const capByVariant = new Array(SPECIES.length).fill(0);
@@ -232,9 +243,11 @@ export class Foliage implements RenderModule {
       return new Sink([m], capFlower[fi], false);
     });
 
+    mark('meshes');
     this.applyQuality(ctx.quality);
+    mark('instances');
     this.buildMs = performance.now() - t0;
-    console.info(`[foliage] built in ${this.buildMs.toFixed(0)} ms: ${P.trees.length} tree / ${P.bushes.length} shrub / ${P.rocks.length} rock / ${P.flowers.length} flower candidates`);
+    console.info(`[foliage] built in ${this.buildMs.toFixed(0)} ms: ${P.trees.length} tree / ${P.bushes.length} shrub / ${P.rocks.length} rock / ${P.flowers.length} flower candidates (${marks.join(', ')} ms)`);
   }
 
   update(ctx: FrameContext) {

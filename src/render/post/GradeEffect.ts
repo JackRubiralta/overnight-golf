@@ -60,9 +60,9 @@ export class GradeEffect extends Effect {
       uniforms: new Map<string, THREE.Uniform>([
         ['uShadowTint', new THREE.Uniform(o.shadowTint ?? new THREE.Color(0.96, 0.99, 1.05))],
         ['uHighlightTint', new THREE.Uniform(o.highlightTint ?? new THREE.Color(1.04, 1.01, 0.95))],
-        ['uContrast', new THREE.Uniform(o.contrast ?? 1.06)],
-        ['uSaturation', new THREE.Uniform(o.saturation ?? 1.08)],
-        ['uVibrance', new THREE.Uniform(o.vibrance ?? 0.12)],
+        ['uContrast', new THREE.Uniform(o.contrast ?? 1.12)],
+        ['uSaturation', new THREE.Uniform(o.saturation ?? 1.12)],
+        ['uVibrance', new THREE.Uniform(o.vibrance ?? 0.18)],
         ['uVignette', new THREE.Uniform(o.vignette ?? 0.22)],
         ['uVignetteSoftness', new THREE.Uniform(o.vignetteSoftness ?? 0.55)],
       ]),

@@ -74,6 +74,8 @@ export class Props implements RenderModule, CollisionWorld {
   private flagOut = false;
   private pendingTrees: TreeCollider[] | null = null;
   private ready = false;
+  /** Resolves once Rapier is initialised and the dynamic props are simulated. */
+  physicsReady: Promise<void> = Promise.resolve();
   private scene: THREE.Scene | null = null;
 
   init(ctx: InitContext) {
@@ -149,7 +151,7 @@ export class Props implements RenderModule, CollisionWorld {
     this.root.add(this.dyn.group);
     for (const s of this.dyn.staticBuckets) this.addCluster(s.bucket, s.center, s.radius, 'small');
     this.dyn.onBreak = (e) => this.emit({ id: e.id, kind: e.kind, pos: e.pos, speed: e.speed, broken: true });
-    this.dyn.initPhysics().catch((e) => console.warn('[props] Rapier unavailable; dynamic props stay static', e));
+    this.physicsReady = this.dyn.initPhysics().catch((e) => console.warn('[props] Rapier unavailable; dynamic props stay static', e));
 
     this.ready = true;
     if (this.pendingTrees) this.setTreeColliders(this.pendingTrees);

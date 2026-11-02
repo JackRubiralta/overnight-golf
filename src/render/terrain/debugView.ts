@@ -36,7 +36,7 @@ function fallbackSky(world: World, tod: string): RenderModule {
   fog.density = p.fogDensity;
   world.renderer.toneMappingExposure = p.exposure;
   const dome = new THREE.Mesh(
-    new THREE.SphereGeometry(900, 32, 16),
+    new THREE.SphereGeometry(2500, 32, 16),
     new THREE.ShaderMaterial({
       side: THREE.BackSide,
       depthWrite: false,
@@ -94,11 +94,13 @@ async function main() {
     world.updateSunShadow(world.camera.position);
   }
   window.__stats = () => world.stats();
+  // `frames=N` stops rendering after N frames (still image: lets headless screenshots finish fast).
+  const maxFrames = Number(p.get('frames') ?? 0) || Infinity;
   let frames = 0;
   const loop = () => {
     world.frame(1 / 60);
     if (++frames === 4) window.__ready = true;
-    requestAnimationFrame(loop);
+    if (frames < maxFrames) requestAnimationFrame(loop);
   };
   loop();
 }

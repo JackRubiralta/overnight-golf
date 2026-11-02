@@ -28,10 +28,21 @@ import { CLUB_KINDS, HANDS_FROM_BUTT, type ClubInfo } from './clubs';
 const BALL_R = 0.021335;
 /** Swing plane steepens to this angle above the address hand height (rad). */
 const TOP_PLANE = 70 * (Math.PI / 180);
-/** Lead arm extension at address as a fraction of full reach. */
-const ADDRESS_REACH = 0.965;
+/** Arm extension at address as a fraction of full reach (lead nearly straight, trail softer). */
+const LEAD_REACH = 0.945;
+const TRAIL_REACH = 0.95;
+/** Club rotation (rad, from straight down in 2D) beyond which the 3D club over-rotates. */
+const OVER_START = 1.75;
+const OVER_GAIN = 1.5;
+/** How far the over-rotated club leans behind the golfer's head (unit-vector z). */
+const OVER_BEHIND = 0.4;
+/** Extra yaw (rad) of the hands/club about the body near the top and at the finish. */
+const TOP_WRAP = 0.3;
+const FINISH_WRAP = 0.95;
 /** Max arm extension during the swing (fraction of full reach). */
 const MAX_REACH = 0.995;
+/** Max distance (m) the body may lean toward the hands per solve to keep the club on the ball. */
+const BODY_LEAN_MAX = 0.06;
 /** Grip offsets along the shaft from the hands centre (m): lead hand above, trail below. */
 const GRIP_L = 0.044;
 const GRIP_R = -0.046;
@@ -165,23 +176,6 @@ export class GolferRig {
       return out.set((x2 - sw.ballX) * k - BALL_R, y, -depth(y));
     };
 
-    // --- club & hands -----------------------------------------------------------------
-    const H = map(sw.hands.x, sw.hands.y, this.t[0]);
-    const dir = this.t[1].set(Math.sin(sw.phi) * k, -Math.cos(sw.phi) * k, Math.cos(sw.phi) * k * cot).normalize();
-    const R = this.clubhead.copy(H).addScaledVector(dir, L3);
-    const c2 = sw.clubhead;
-    const w = 1 - smooth(0.12, 0.35, c2.y * k);
-    if (w > 0) {
-      const e = map(c2.x, c2.y, this.t[2]).sub(R).multiplyScalar(w);
-      H.add(e);
-      R.add(e);
-    }
-    const Yc = this.t[3].copy(dir).negate();
-    const N = this.t[4].set(0, Math.cos(alpha), Math.sin(alpha));
-    const Xc = this.t[5].crossVectors(Yc, N).normalize();
-    Xc.applyAxisAngle(Yc, (-inp.face * Math.PI) / 180);
-    const Zc = this.t[6].crossVectors(Xc, Yc);
-
     // --- swing phase --------------------------------------------------------------------
     const theta = Math.atan2(sw.hands.x - sw.shoulder.x, sw.shoulder.y - sw.hands.y);
     const dTh = theta - this.prevTheta;
@@ -196,26 +190,73 @@ export class GolferRig {
     const back = clamp(-theta / 1.9, 0, 1); // 0 address → 1 top
     const thru = smooth(0.1, 1.8, theta); // 0 impact → 1 finish
 
-    // --- posture constants (address) -----------------------------------------------------
+    // --- posture at address: place the body so both arms reach the grip --------------------
     const kind = club.kind;
     const tau0 = clamp(0.5 + (1.04 - L3) * 0.62, 0.48, 0.72); // spine tilt from vertical
     const sigma0 = 0.12; // side bend (trail shoulder low)
     const pelvisH = 0.872 - (1.04 - L3) * 0.08;
     const ha = map(sw.shoulder.x, sw.shoulder.y - sw.armLen, this.t[7]);
     const xc = map(sw.shoulder.x, 0, this.t[8]).x - (BALL_FWD[kind] ?? 0) + inp.stance * 0.03;
-    // Address lead wrist estimate.
-    const uAddr = this.t[9].set(0, Math.sin(alpha), -Math.cos(alpha));
-    const wristA = this.t[10].copy(ha).addScaledVector(uAddr, GRIP_L + 0.055).addScaledVector(AX_X, 0.012);
-    // Lead shoulder at address relative to the pelvis centre.
+    const uA = this.t[9].set(0, Math.sin(alpha), -Math.cos(alpha));
+    const zA = v3().crossVectors(AX_X, uA);
+    const gLa = v3().copy(ha).addScaledVector(uA, GRIP_L);
+    const gRa = v3().copy(ha).addScaledVector(uA, GRIP_R);
+    const bLa = v3().copy(AX_X).multiplyScalar(BACK_L.x).addScaledVector(zA, BACK_L.z);
+    const bRa = v3().copy(AX_X).multiplyScalar(BACK_R.x).addScaledVector(zA, BACK_R.z);
     const qP0 = this.q[0].setFromAxisAngle(AX_X, tau0 * 0.72);
     const qC0 = this.q[1].setFromAxisAngle(AX_X, tau0).multiply(this.q[2].setFromAxisAngle(AX_Z, sigma0));
-    const shRel = this.t[11].set(0, DIM.waist, 0).applyQuaternion(qP0).add(this.t[12].set(DIM.shoulderX, DIM.shoulderY, DIM.shoulderZ).applyQuaternion(qC0));
-    const reach = (DIM.upperArm + DIM.foreArm) * ADDRESS_REACH;
-    const dx = xc + shRel.x - wristA.x;
-    const dy = pelvisH + shRel.y - wristA.y;
-    const dz = Math.sqrt(Math.max(0.0025, reach * reach - dx * dx - dy * dy));
-    const pelvisZ0 = wristA.z - dz - shRel.z;
+    const waistRel = v3().set(0, DIM.waist, 0).applyQuaternion(qP0);
+    const relL = v3().set(DIM.shoulderX, DIM.shoulderY, DIM.shoulderZ).applyQuaternion(qC0).add(waistRel);
+    const relR = v3().set(-DIM.shoulderX, DIM.shoulderY, DIM.shoulderZ).applyQuaternion(qC0).add(waistRel);
+    const full = DIM.upperArm + DIM.foreArm;
+    let pelvisZ0 = ha.z - 0.45;
+    const sA = v3();
+    const wA = v3();
+    const need = (g: THREE.Vector3, rel: THREE.Vector3, bN: THREE.Vector3, reach: number) => {
+      sA.set(xc, pelvisH, pelvisZ0).add(rel);
+      this.wristOf(g, sA, uA, bN, wA);
+      const dx = sA.x - wA.x;
+      const dy = sA.y - wA.y;
+      return wA.z - Math.sqrt(Math.max(0.0025, reach * reach - dx * dx - dy * dy)) - rel.z;
+    };
+    for (let it = 0; it < 4; it++) pelvisZ0 = Math.max(need(gLa, relL, bLa, full * LEAD_REACH), need(gRa, relR, bRa, full * TRAIL_REACH));
     const footZ = pelvisZ0 + 0.035;
+
+    // --- club & hands -----------------------------------------------------------------
+    const H = map(sw.hands.x, sw.hands.y, this.t[0]);
+    // Past ~100° of club rotation the 2D (face-on) club keeps pointing "up"; a real club keeps
+    // rotating in 3D toward parallel at the top / wrapped at the finish, behind the head.
+    let phi3 = sw.phi;
+    const over = Math.abs(phi3) - OVER_START;
+    if (over > 0) phi3 = Math.sign(phi3) * (OVER_START + over * OVER_GAIN);
+    const dir = this.t[1].set(Math.sin(phi3) * k, -Math.cos(phi3) * k, Math.cos(phi3) * k * cot).normalize();
+    dir.z -= OVER_BEHIND * smooth(Math.PI * 0.95, Math.PI * 1.4, Math.abs(phi3));
+    dir.normalize();
+    // Arms are carried around by the body turn near the top and in the finish.
+    const wrap = theta < 0 ? -TOP_WRAP * smooth(0.3, 1.9, -theta) : FINISH_WRAP * smooth(0.4, 1.9, theta);
+    if (wrap !== 0) {
+      const px = xc;
+      const pz = pelvisZ0;
+      H.x -= px;
+      H.z -= pz;
+      H.applyAxisAngle(AX_Y, wrap);
+      H.x += px;
+      H.z += pz;
+      dir.applyAxisAngle(AX_Y, wrap);
+    }
+    const R = this.clubhead.copy(H).addScaledVector(dir, L3);
+    const c2 = sw.clubhead;
+    const w = 1 - smooth(0.12, 0.35, c2.y * k);
+    if (w > 0) {
+      const e = map(c2.x, c2.y, this.t[2]).sub(R).multiplyScalar(w);
+      H.add(e);
+      R.add(e);
+    }
+    const Yc = this.t[3].copy(dir).negate();
+    const N = this.t[4].set(0, Math.cos(alpha), Math.sin(alpha)).applyAxisAngle(AX_Y, wrap);
+    const Xc = this.t[5].crossVectors(Yc, N).normalize();
+    Xc.applyAxisAngle(Yc, (-inp.face * Math.PI) / 180);
+    const Zc = this.t[6].crossVectors(Xc, Yc);
 
     // --- dynamic body angles --------------------------------------------------------------
     const psiBack = Math.max(-MAX_SHOULDER_BACK, theta * SHOULDER_TURN);
@@ -247,11 +288,9 @@ export class GolferRig {
     const qP = this.q[0].setFromAxisAngle(AX_Y, psiH).multiply(this.q[2].setFromAxisAngle(AX_X, tauP));
     const qC = this.q[1].setFromAxisAngle(AX_X, tau).multiply(this.q[2].setFromAxisAngle(AX_Z, sigma)).multiply(this.q[3].setFromAxisAngle(AX_Y, psiS));
     const waist = this.t[14].set(0, DIM.waist, 0).applyQuaternion(qP).add(P);
-    this.setFrame(Bone.Pelvis, P, this.t[15].copy(AX_X).applyQuaternion(qP), this.t[16].copy(AX_Y).applyQuaternion(qP), this.t[17].copy(AX_Z).applyQuaternion(qP));
     const cx = v3().copy(AX_X).applyQuaternion(qC);
     const cy = v3().copy(AX_Y).applyQuaternion(qC);
     const cz = v3().copy(AX_Z).applyQuaternion(qC);
-    this.setFrame(Bone.Chest, waist, cx, cy, cz);
     const shL = v3().set(DIM.shoulderX, DIM.shoulderY, DIM.shoulderZ).applyQuaternion(qC).add(waist);
     const shR = v3().set(-DIM.shoulderX, DIM.shoulderY, DIM.shoulderZ).applyQuaternion(qC).add(waist);
 
@@ -263,17 +302,12 @@ export class GolferRig {
     const wR = v3();
     const backL = v3().copy(Xc).multiplyScalar(BACK_L.x).addScaledVector(Zc, BACK_L.z);
     const backR = v3().copy(Xc).multiplyScalar(BACK_R.x).addScaledVector(Zc, BACK_R.z);
-    const wristOf = (g: THREE.Vector3, sh: THREE.Vector3, backN: THREE.Vector3, out: THREE.Vector3) => {
-      const toSh = this.t[18].subVectors(sh, g).normalize();
-      const d = this.t[19].copy(toSh).add(Yc).normalize();
-      return out.copy(g).addScaledVector(d, DIM.wristToFist).addScaledVector(backN, 0.008);
-    };
     const maxR = (DIM.upperArm + DIM.foreArm) * MAX_REACH;
     for (let it = 0; it < 3; it++) {
       gL.copy(Hc).addScaledVector(Yc, GRIP_L);
       gR.copy(Hc).addScaledVector(Yc, GRIP_R);
-      wristOf(gL, shL, backL, wL);
-      wristOf(gR, shR, backR, wR);
+      this.wristOf(gL, shL, Yc, backL, wL);
+      this.wristOf(gR, shR, Yc, backR, wR);
       const sL = wL.distanceTo(shL);
       const sR = wR.distanceTo(shR);
       const exL = sL - maxR;
@@ -282,9 +316,20 @@ export class GolferRig {
       const fix = v3();
       if (exL >= exR) fix.subVectors(shL, wL).normalize().multiplyScalar(exL + 0.002);
       else fix.subVectors(shR, wR).normalize().multiplyScalar(exR + 0.002);
+      // Near impact the club must stay on the ball: the body leans toward the hands instead
+      // (bounded), elsewhere the hands are pulled in toward the shoulders.
+      const bodyPart = Math.min(w, BODY_LEAN_MAX / Math.max(1e-6, fix.length()));
+      const body = v3().copy(fix).multiplyScalar(-bodyPart);
+      P.add(body);
+      waist.add(body);
+      shL.add(body);
+      shR.add(body);
+      fix.multiplyScalar(1 - bodyPart);
       Hc.add(fix);
       R.add(fix);
     }
+    this.setFrame(Bone.Pelvis, P, this.t[15].copy(AX_X).applyQuaternion(qP), this.t[16].copy(AX_Y).applyQuaternion(qP), this.t[17].copy(AX_Z).applyQuaternion(qP));
+    this.setFrame(Bone.Chest, waist, cx, cy, cz);
     this.shaftPoint.copy(R).addScaledVector(Yc, 0.3);
     const clubFrame = new THREE.Matrix4().makeBasis(Xc, Yc, Zc).setPosition(R);
     this.hideOtherClubs(clubFrame);
@@ -294,7 +339,7 @@ export class GolferRig {
     // --- arms -----------------------------------------------------------------------------
     const down = v3().set(0, -1, 0);
     const poleL = v3().copy(cy).multiplyScalar(-0.8).addScaledVector(cz, -0.7).addScaledVector(cx, 0.35).addScaledVector(down, 0.6 * thru);
-    const poleR = v3().copy(cy).multiplyScalar(-0.7).addScaledVector(cz, -0.6).addScaledVector(cx, -0.45).addScaledVector(down, 0.9 * back).addScaledVector(down, 0.4 * thru);
+    const poleR = v3().copy(cy).multiplyScalar(-0.7).addScaledVector(cz, -0.6).addScaledVector(cx, -0.45).addScaledVector(down, 2.2 * back).addScaledVector(down, 0.4 * thru);
     this.solveArm(shL, wL, gL, poleL, backL, Bone.UpperL, Bone.ForeL, Bone.HandL);
     this.solveArm(shR, wR, gR, poleR, backR, Bone.UpperR, Bone.ForeR, Bone.HandR);
 
@@ -329,6 +374,13 @@ export class GolferRig {
     const headUp = v3().copy(UP).multiplyScalar(0.7).addScaledVector(cy, 0.3);
     this.setLimb(Bone.Neck, neck, headC, cz);
     this.setBone(Bone.Head, headC, headUp.addScaledVector(fwd, -headUp.dot(fwd)), fwd);
+  }
+
+  /** Wrist position for a hand gripping at `g`: between the shaft line and the shoulder. */
+  private wristOf(g: THREE.Vector3, sh: THREE.Vector3, yc: THREE.Vector3, backN: THREE.Vector3, out: THREE.Vector3) {
+    const toSh = this.t[18].subVectors(sh, g).normalize();
+    const d = this.t[19].copy(toSh).add(yc).normalize();
+    return out.copy(g).addScaledVector(d, DIM.wristToFist).addScaledVector(backN, 0.008);
   }
 
   private solveArm(sh: THREE.Vector3, wrist: THREE.Vector3, grip: THREE.Vector3, pole: THREE.Vector3, backN: THREE.Vector3, up: number, fo: number, ha: number) {

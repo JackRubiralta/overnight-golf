@@ -151,12 +151,14 @@ const C = {
   fairwayA: '0.046, 0.140, 0.015',
   fairwayB: '0.072, 0.194, 0.024',
   firstCut: '0.042, 0.122, 0.015',
-  greenA: '0.056, 0.176, 0.022',
-  greenB: '0.068, 0.200, 0.028',
+  greenA: '0.050, 0.160, 0.026',
+  greenB: '0.066, 0.192, 0.033',
   fringe: '0.048, 0.146, 0.019',
   tee: '0.058, 0.168, 0.020',
   roughA: '0.034, 0.085, 0.013',
   roughB: '0.048, 0.098, 0.016',
+  roughOlive: '0.058, 0.092, 0.020',
+  roughCool: '0.026, 0.078, 0.022',
   deepA: '0.045, 0.072, 0.016',
   deepB: '0.064, 0.082, 0.022',
   fescue: '0.175, 0.145, 0.062',
@@ -235,6 +237,9 @@ tSpec = 0.12;
   float vCl = vis(fp, 2.2 * 2.0);
   float clump = mix(0.5, cl.x, vCl);
   vec3 rough = mix(vec3(${C.roughA}), vec3(${C.roughB}), mac2) * (0.84 + 0.32 * clump);
+  // Macro hue drift (~200 m): olive/yellowish swards vs cooler blue-green ones.
+  rough = mix(rough, vec3(${C.roughOlive}), smoothstep(0.45, 0.75, mac1) * 0.4);
+  rough = mix(rough, vec3(${C.roughCool}), smoothstep(0.5, 0.25, mac1) * 0.4);
   rough = mix(rough, vec3(${C.straw}), dryness * 0.12);
   rough *= 1.0 + lush * 0.12 * vec3(-0.3, 0.2, -0.4);
   // Mid-scale patchiness (~3 m and ~13 m): lighter/yellower vs darker/bluer clumps. Low enough
@@ -242,7 +247,7 @@ tSpec = 0.12;
   float pA = mix(0.5, vnoise(xz * 0.31 + 4.1), vis(fp, 0.31));
   float pB = vnoise(xz * 0.075 - 2.3);
   float patchN = pA * 0.45 + pB * 0.55;
-  rough *= 0.84 + 0.32 * patchN;
+  rough *= 0.88 + 0.24 * patchN;
   rough = mix(rough, vec3(${C.straw}), smoothstep(0.6, 0.85, patchN) * (0.12 + 0.2 * dryness));
   float deepW = smoothstep(17.0, 30.0, corridor + eN * 10.0 + (mac2 - 0.5) * 14.0 + (pB - 0.5) * 8.0);
   // fescue: ~10 m patches, broken up by tufts that fade out with distance
@@ -350,6 +355,8 @@ tSpec = 0.12;
       float streak = vnoise(vec2(dot(xz, dir) * 0.5, dot(xz, pd) * 9.0));
       fair *= 1.0 + (streak - 0.5) * 0.16 * vis(LFP(pd), 9.0);
       fair *= 1.0 + (vnoise(xz * 0.9 + 3.0) - 0.5) * 0.08 * vis(fp, 0.9); // ~1 m wear / thickness
+      fair *= 1.0 + (hash12(floor(xz * 40.0)) - 0.5) * 0.2 * vis(fp, 40.0)   // blade tips
+                  + (vnoise(xz * 6.0 + 1.3) - 0.5) * 0.12 * vis(fp, 6.0);    // ~15 cm clumps
     }
     fair = mix(fair, vec3(${C.straw}), dryness * 0.12);
     // sparse divots / sandy repair marks
@@ -430,12 +437,16 @@ tSpec = 0.12;
       float b = s1 * grain(dot(viewXZ, d1)) + s2 * grain(dot(viewXZ, d2));
       vec3 green = mix(vec3(${C.greenA}), vec3(${C.greenB}), 0.5 + 0.42 * b);
       // soft ~2 m density variation + very fine speckle (individual blade tips)
-      green *= 0.96 + 0.08 * vnoise(xz * 0.6) + 0.05 * (vnoise(xz * 0.17 + 9.0) - 0.5);
-      green *= 1.0 + (vnoise(xz * 45.0) - 0.5) * 0.12 * vis(fp, 45.0) + (vnoise(xz * 9.0) - 0.5) * 0.05 * vis(fp, 9.0);
+      green *= 0.95 + 0.1 * vnoise(xz * 0.6) + 0.07 * (vnoise(xz * 0.17 + 9.0) - 0.5);
+      // blade tips (~2 cm), ~12 cm tufts of denser growth, ~40 cm mottling
+      green *= 1.0 + (hash12(floor(xz * 55.0)) - 0.5) * 0.22 * vis(fp, 55.0)
+                   + (vnoise(xz * 8.0) - 0.5) * 0.12 * vis(fp, 8.0)
+                   + (vnoise(xz * 2.4 + 5.0) - 0.5) * 0.08 * vis(fp, 2.4);
       col = mix(col, green, greenW);
       // Almost no detail relief: a putting surface is smooth (strong relief reads as ripples).
       vec3 gg = noised(xz * 7.0);
-      tGrad = mix(tGrad, gg.yz * 7.0 * 0.0012 * vis(fp, 7.0), greenW);
+      vec3 gm = noised(xz * 40.0 + 3.1);                     // blade-scale sheen breakup
+      tGrad = mix(tGrad, gg.yz * 7.0 * 0.0012 * vis(fp, 7.0) + gm.yz * 40.0 * 0.0006 * vis(fp, 40.0), greenW);
       tRough = mix(tRough, 0.82, greenW);
     }
   }
@@ -448,6 +459,9 @@ tSpec = 0.12;
     float sandW = inside(sandD, aw);
     float soilW = inside(sandD - 0.2 - fineN * 1.5, aw) * (1.0 - sandW);
     col = mix(col, vec3(${C.soil}) * (0.8 + 0.4 * mid), soilW * 0.9);
+    // Turf lip: the grass edge overhangs the cut face and shades it (dark rim around the sand).
+    float lipShade = inside(sandD - 0.45 - fineN, 0.18) * (1.0 - sandW);
+    col *= 1.0 - 0.35 * lipShade;
     if (sandW > 0.001) {
       vec3 gr = noised(xz * 34.0);
       float grain = mix(0.5, gr.x, vis(fp, 34.0));
@@ -461,6 +475,8 @@ tSpec = 0.12;
       float wet = smoothstep(-0.9, -0.05, sandD) * (0.55 + 0.45 * vnoise(xz * 1.7));
       vec3 sand = vec3(${C.sand}) * (0.9 + 0.18 * grain) * (0.94 + 0.12 * mac2);
       sand = mix(sand, vec3(${C.sandWet}), wet * 0.55);
+      // Raked furrows hold slightly darker, coarser sand; lumps/footprints shade a little.
+      sand *= 1.0 - 0.06 * cos(ph * 6.2832) * vr - 0.08 * (sb.x - 0.5);
       col = mix(col, sand, sandW);
       tGrad = mix(tGrad, rakeG + gr.yz * 34.0 * 0.0025 * vis(fp, 34.0) + sb.yz * 0.9 * 0.06, sandW);
       tRough = mix(tRough, mix(0.93, 0.8, wet), sandW);

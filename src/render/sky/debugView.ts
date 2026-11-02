@@ -27,9 +27,17 @@ async function main() {
   const grids = await bakeCourse(field);
   const course = new Course(field, grids);
   const world = new World(document.getElementById('app')!);
+  world.renderer.domElement.addEventListener('webglcontextlost', () => console.error('WebGL context lost'));
   const sky = new SkySystem();
   const mods = p.get('terrain') === '1' ? [sky, new Terrain()] : [sky];
-  await world.init(course, grids, mods, p.get('post') === '1' ? new Post() : null);
+  const post = p.get('post') === '1' ? new Post() : null;
+  await world.init(course, grids, mods, post);
+  // per-effect overrides for A/B checks: &ao=0 &bloom=0 &smaa=0 &dof=40 (focus distance, m)
+  if (post) {
+    const flag = (k: 'ao' | 'bloom' | 'smaa') => (p.get(k) === null ? world.quality[k] : p.get(k) === '1');
+    post.setQuality({ ...world.quality, ao: flag('ao'), bloom: flag('bloom'), smaa: flag('smaa'), dof: p.get('dof') ? true : world.quality.dof });
+    if (p.get('dof')) post.setDof(true, Number(p.get('dof')));
+  }
   const wind = (p.get('wind') ?? '1,0,4').split(',').map(Number);
   sky.setWind(wind[0], wind[1], wind[2]);
 
@@ -48,8 +56,11 @@ async function main() {
   window.__stats = () => world.stats();
   const maxFrames = Number(p.get('frames') ?? 6);
   let frames = 0;
+  const gl = world.renderer.getContext();
+  const px = new Uint8Array(4);
   const loop = () => {
     world.frame(1 / 60);
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); // GPU sync: __ready means really rendered
     if (++frames === maxFrames) {
       window.__ready = true;
       return;

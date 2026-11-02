@@ -59,7 +59,6 @@ export class Golfer implements RenderModule {
   private trailSpeed = -1;
   private blendT = 1;
   private from = Array.from({ length: BONE_COUNT }, () => ({ p: new THREE.Vector3(), q: new THREE.Quaternion(), s: new THREE.Vector3() }));
-  private tmpM = new THREE.Matrix4();
   private tmpP = new THREE.Vector3();
   private tmpQ = new THREE.Quaternion();
   private tmpS = new THREE.Vector3();
@@ -94,10 +93,14 @@ export class Golfer implements RenderModule {
     this.root.add(this.trail.mesh);
     ctx.scene.add(this.root);
     // Until the game poses us, stand idle at the origin.
-    if (this.mode === 'none') this.setWalkPose(new THREE.Vector3(), 0, 0);
+    if (this.mode === 'none') {
+      this.setWalkPose(new THREE.Vector3(), 0, 0);
+      this.mode = 'none'; // the first real pose should not cross-fade from this placeholder
+    }
   }
 
   update(ctx: FrameContext) {
+    if (this.blendT < 1) this.commit(ctx.dt);
     this.trail.update(performance.now() / 1000);
     if (DEBUG_CAM) this.debugCamera(ctx.camera);
   }
@@ -160,7 +163,7 @@ export class Golfer implements RenderModule {
     this.frame.makeBasis(x, y, z).setPosition(p.ballPos.x, p.ballPos.y - p.swing.ballY, p.ballPos.z);
     this.terrainLift();
     this.rig.solveSwing({ swing: p.swing, club: this.clubs[p.clubKind], face: p.face, stance: p.stance, dt });
-    this.commit(dt);
+    this.commit(0);
     if (this.trail.enabled) {
       const mph = this.trailSpeed >= 0 ? this.trailSpeed : p.swing.speedMph;
       const head = new THREE.Vector3().copy(this.rig.clubhead).applyMatrix4(this.frame);
@@ -177,7 +180,7 @@ export class Golfer implements RenderModule {
     this.frame.makeRotationY(yaw + Math.PI).setPosition(pos);
     this.terrainLift();
     this.rig.solveWalk(this.clubs[this.clubKind], speed, dt);
-    this.commit(dt);
+    this.commit(0);
   }
 
   /** World position of the clubhead (sole under the face centre). */
@@ -223,6 +226,7 @@ export class Golfer implements RenderModule {
     }
   }
 
+  /** Write bone world matrices (cross-fading from the previous mode while blendT < 1). */
   private commit(dt: number) {
     this.blendT = Math.min(1, this.blendT + dt / MODE_BLEND);
     const t = this.blendT < 1 ? this.blendT * this.blendT * (3 - 2 * this.blendT) : 1;
@@ -238,7 +242,6 @@ export class Golfer implements RenderModule {
         out.compose(this.tmpP, this.tmpQ, this.tmpS);
       }
     }
-    void this.tmpM;
   }
 }
 

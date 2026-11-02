@@ -153,6 +153,19 @@ describe('Input: keyboard & context', () => {
     expect(presses).toEqual([true, true, false]);
   });
 
+  it('on very slow frames, stale repeated taps collapse instead of lagging', () => {
+    const t = setup();
+    t.input.setContext('stance');
+    t.key('KeyQ', true);
+    t.key('KeyQ', false);
+    t.key('KeyQ', true);
+    t.key('KeyQ', false);
+    t.advance(500);
+    const presses: boolean[] = [];
+    for (let i = 0; i < 2; i++) t.frame(() => presses.push(t.input.pressed('pathIn')));
+    expect(presses).toEqual([true, false]);
+  });
+
   it('ignores auto-repeat and typing in text inputs', () => {
     const t = setup();
     t.input.setContext('stance');

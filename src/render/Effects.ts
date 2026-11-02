@@ -259,21 +259,21 @@ export class Effects implements RenderModule {
       const a = Math.random() * Math.PI * 2;
       const h = rnd(0.8, 2.4) * (0.5 + s);
       this.particles.spawn(pos.x + Math.cos(a) * 0.12, level + 0.02, pos.z + Math.sin(a) * 0.12, Math.cos(a) * h, rnd(2.0, 4.8) * (0.5 + s), Math.sin(a) * h,
-        rnd(0.9, 1.6), rnd(0.02, 0.045), rnd(0.015, 0.03), WATER_DROP[0], WATER_DROP[1], WATER_DROP[2], 0.9, 0.3, 9.8, PF_GROUND, SHAPE_DROP, 0, level);
+        rnd(0.9, 1.6), rnd(0.04, 0.08), rnd(0.025, 0.05), WATER_DROP[0], WATER_DROP[1], WATER_DROP[2], 0.9, 0.3, 9.8, PF_GROUND, SHAPE_DROP, 0, level);
     }
     // Central jet (Worthington column).
     const jet = this.n(16 + 26 * s);
     for (let i = 0; i < jet; i++) {
       this.particles.spawn(pos.x + rnd(-0.06, 0.06), level, pos.z + rnd(-0.06, 0.06), rnd(-0.35, 0.35), rnd(3.5, 7.5) * (0.4 + s), rnd(-0.35, 0.35),
-        rnd(1.0, 1.8), rnd(0.03, 0.06), 0.02, WATER_DROP[0], WATER_DROP[1], WATER_DROP[2], 0.95, 0.2, 9.8, PF_GROUND, SHAPE_DROP, 0, level);
+        rnd(1.0, 1.8), rnd(0.05, 0.09), 0.03, WATER_DROP[0], WATER_DROP[1], WATER_DROP[2], 0.95, 0.2, 9.8, PF_GROUND, SHAPE_DROP, 0, level);
     }
     // Mist / spray haze.
-    const mist = this.n(8 + 14 * s);
+    const mist = this.n(5 + 8 * s);
     for (let i = 0; i < mist; i++) {
       const a = Math.random() * Math.PI * 2;
       const h = rnd(0.3, 1.2);
       this.particles.spawn(pos.x, level + rnd(0.1, 0.5), pos.z, Math.cos(a) * h, rnd(0.8, 2.5) * s + 0.3, Math.sin(a) * h,
-        rnd(1.0, 2.0), 0.2, rnd(0.8, 1.8) * (0.5 + s), MIST[0], MIST[1], MIST[2], 0.28, 2.5, 0.3, PF_WIND, SHAPE_SOFT);
+        rnd(1.0, 2.0), 0.15, rnd(0.5, 1.1) * (0.5 + s), MIST[0], MIST[1], MIST[2], 0.1, 2.5, 0.3, PF_WIND, SHAPE_SOFT);
     }
   }
 

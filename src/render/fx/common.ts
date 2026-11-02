@@ -10,7 +10,7 @@ import { globalUniforms } from '../shared';
 /** Direct sun contribution on particles (× uSunColor). */
 export const FX_SUN = 1.25;
 /** Forward-scattering boost when looking toward the sun (backlit dust/pollen glows). */
-export const FX_FORWARD = 2.6;
+export const FX_FORWARD = 1.1;
 /** Ambient contribution (× fog colour, which tracks the sky tint). */
 export const FX_AMBIENT = 0.55;
 
@@ -22,6 +22,8 @@ export const fxShared = {
   uScreenScale: { value: 800 },
   /** Radians per pixel: 1 / uScreenScale. */
   uPixel: { value: 1 / 800 },
+  /** 2 tan(fov/2): view-plane height at 1 m distance. */
+  uFovScale: { value: 0.9 },
 };
 
 export function fxUniforms() {
@@ -33,12 +35,15 @@ export function fxUniforms() {
     uTime: globalUniforms.uTime,
     uScreenScale: fxShared.uScreenScale,
     uPixel: fxShared.uPixel,
+    uFovScale: fxShared.uFovScale,
   };
 }
 
 /** Update the screen-scale uniforms for the current camera / drawing buffer. */
 export function updateFxScreen(camera: THREE.PerspectiveCamera, bufferHeight: number) {
-  const s = bufferHeight / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+  const k = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+  const s = bufferHeight / k;
+  fxShared.uFovScale.value = k;
   fxShared.uScreenScale.value = s;
   fxShared.uPixel.value = 1 / s;
 }
@@ -51,10 +56,11 @@ uniform float uFogDensity;
 uniform float uTime;
 uniform float uScreenScale;
 uniform float uPixel;
+uniform float uFovScale;
 float fxFog(float d) { float x = uFogDensity * d; return 1.0 - exp(-x * x); }
 // Light reaching a small translucent particle seen along viewDir (camera → particle).
 vec3 fxLight(vec3 viewDir) {
-  float fwd = pow(max(dot(viewDir, uSunDir), 0.0), 6.0);
+  float fwd = pow(max(dot(viewDir, uSunDir), 0.0), 10.0);
   float sunUp = 0.35 + 0.65 * smoothstep(0.0, 0.5, uSunDir.y);
   return uSunColor * (${f(FX_SUN)} * sunUp + ${f(FX_FORWARD)} * fwd) + uFogColor * ${f(FX_AMBIENT)};
 }
