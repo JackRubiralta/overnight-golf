@@ -33,6 +33,8 @@ The defaults follow the controls of the game that inspired this one; RESEARCH.md
 | **Mouse wheel** | Cycle clubs *(improvement)* |
 | **Tab** | Back to walking |
 | **Space** | Retake the last shot under stroke-and-distance (+1) |
+| **Mouse / right stick** (in flight) | Look around: orbit the camera around the flying ball *(improvement)* |
+| **W / S** (in flight) | Zoom the flight camera in / out |
 | **F** (hold, in flight) | Fast-forward the ball *(improvement)* |
 | **RMB** (hold) | Rangefinder |
 | **Esc** | Pause |

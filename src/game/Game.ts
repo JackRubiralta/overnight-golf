@@ -272,6 +272,8 @@ export class Game {
     this.suggestPending = false;
     this.mods.golfer.setVisible(true);
     this.mods.props.setFlagOut(lie === 'green' && this.distToPin() < 25);
+    // The previous shot's tracer would cross the new address view (and hide the ball on the green).
+    this.mods.effects.clearTracers();
   }
 
   private enterWalk() {
@@ -452,8 +454,10 @@ export class Game {
     this.sim.pos.copy(this.ball);
     this.sim.launch(velocity, spin);
     this.mode = 'flight';
-    this.input.exitPointerLock();
+    // Keep the mouse captured (it already is from the swing) so it can look around in flight.
     this.rig.startFlight();
+    // Mouse-look during flight (walk context = look deltas, pointer lock, F fast-forward, W/S zoom).
+    this.input.setContext('walk');
     this.rig.setFlightDir(aim);
     this.ui.hideShotReport();
     this.fastForward = false;
@@ -502,8 +506,19 @@ export class Game {
       }
     }
     if (this.sim.moving) {
+      // Look around while the ball flies: mouse (captured) or right stick orbits, W/S zooms.
+      const look = this.input.consumeLookDelta();
+      const ls = 0.0035 * settings.get('lookSensitivity');
+      let dYaw = -look.dx * ls;
+      let dPitch = look.dy * ls;
+      if (this.input.padLook) {
+        dYaw -= this.input.padLook.x * dt * 2.2;
+        dPitch += this.input.padLook.y * dt * 1.6;
+      }
+      const zoom = ((this.input.held('moveForward') ? 1 : 0) - (this.input.held('moveBack') ? 1 : 0)) * dt * 1.5;
+      this.rig.orbitFlight(dYaw, dPitch, zoom);
       this.rig.flight(this.sim.pos, this.sim.vel, this.shot?.origin ?? this.ball, dt);
-      this.hint = 'Hold F to fast-forward';
+      this.hint = 'Move the mouse to look around · W/S zoom · Hold F to fast-forward';
       return;
     }
     // Ball has stopped.
@@ -871,7 +886,15 @@ export class Game {
     if (mph === undefined && o.distance !== undefined) {
       const target = o.distance;
       for (let it = 0; it < (o.autoAim ? 4 : 1); it++) {
-        mph = solveSpeed((v) => this.debugPredict({ ...o, aim: this.swing.aim, clubSpeed: v }).along, target, 1, club.kind === 'putter' ? 25 : 135);
+        mph = solveSpeed(
+          (v) => {
+            const pr = this.debugPredict({ ...o, aim: this.swing.aim, clubSpeed: v });
+            return o.solveFor === 'carry' ? pr.carry : pr.along;
+          },
+          target,
+          1,
+          club.kind === 'putter' ? 25 : 135,
+        );
         if (!o.autoAim) break;
         const pr = this.debugPredict({ ...o, aim: this.swing.aim, clubSpeed: mph });
         const errDeg = (Math.atan2(pr.lateral, Math.max(0.5, pr.along)) * 180) / Math.PI;

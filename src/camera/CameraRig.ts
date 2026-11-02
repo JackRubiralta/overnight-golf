@@ -68,7 +68,8 @@ export class CameraRig {
     // (club bar / hint) while the target line still runs up the middle of the screen.
     const back = putting ? 3.0 : 4.6;
     const up = putting ? 1.2 : 1.6;
-    this.targetPos.copy(ball).addScaledVector(aimDir, -back).addScaledVector(right, -0.55).addScaledVector(UP, up);
+    // Putting: straight down the line (the golfer stands left of it, out of the way).
+    this.targetPos.copy(ball).addScaledVector(aimDir, -back).addScaledVector(right, putting ? 0.05 : -0.55).addScaledVector(UP, up);
     const g = this.camGround(this.targetPos.x, this.targetPos.z) + 0.6;
     if (this.targetPos.y < g) this.targetPos.y = g;
     this.targetLook.copy(ball).addScaledVector(aimDir, putting ? 6 : 12).addScaledVector(UP, putting ? -0.3 : 0);
@@ -77,8 +78,27 @@ export class CameraRig {
     this.apply(dt);
   }
 
+  /** Player-controlled orbit around the ball during flight (radians / zoom multiplier). */
+  flightYawOff = 0;
+  flightPitchOff = 0;
+  flightZoom = 1;
+  private flightUserControl = false;
+
   startFlight() {
     this.flightTime = 0;
+    this.flightYawOff = 0;
+    this.flightPitchOff = 0;
+    this.flightZoom = 1;
+    this.flightUserControl = false;
+  }
+
+  /** Mouse / right-stick look during flight: orbit around the ball, and zoom (>0 = closer). */
+  orbitFlight(dYaw: number, dPitch: number, dZoom: number) {
+    if (dYaw === 0 && dPitch === 0 && dZoom === 0) return;
+    this.flightUserControl = true;
+    this.flightYawOff += dYaw;
+    this.flightPitchOff = Math.max(-0.35, Math.min(1.2, this.flightPitchOff + dPitch));
+    this.flightZoom = Math.max(0.35, Math.min(3, this.flightZoom * Math.exp(-dZoom)));
   }
 
   /**
@@ -110,7 +130,18 @@ export class CameraRig {
     this.targetPos.copy(t);
     // Aim a little below a high ball so the ground/horizon stays in view under it.
     this.targetLook.copy(ball).addScaledVector(UP, -0.3 * ballUp);
-    damp(this.pos, this.targetPos, 2.4, dt);
+    if (this.flightUserControl) {
+      // Player is looking around: orbit the chase offset around the ball.
+      const off = new THREE.Vector3().subVectors(t, ball);
+      const r = Math.max(4, off.length()) * this.flightZoom;
+      const baseYaw = Math.atan2(off.x, off.z);
+      const basePitch = Math.asin(Math.max(-1, Math.min(1, off.y / Math.max(1e-6, off.length()))));
+      const yaw = baseYaw + this.flightYawOff;
+      const pitch = Math.max(-0.2, Math.min(1.35, basePitch + this.flightPitchOff));
+      this.targetPos.set(ball.x + Math.sin(yaw) * Math.cos(pitch) * r, ball.y + Math.sin(pitch) * r, ball.z + Math.cos(yaw) * Math.cos(pitch) * r);
+      this.targetLook.copy(ball);
+    }
+    damp(this.pos, this.targetPos, this.flightUserControl ? 6 : 2.4, dt);
     this.keepAboveGround(1.0);
     damp(this.look, this.targetLook, 12, dt);
     this.apply(dt);
