@@ -288,7 +288,11 @@ export class Game {
 
   // ───────────────────────────── per-frame ─────────────────────────────
 
+  /** Smoothed frames per second (for tests / perf HUD). */
+  fps = 0;
+
   update(dtRaw: number) {
+    if (dtRaw > 0) this.fps = this.fps ? this.fps * 0.9 + 0.1 / dtRaw : 1 / dtRaw;
     const dt = Math.min(dtRaw, 0.05);
     this.time += dt;
     this.input.update();
@@ -806,6 +810,14 @@ export class Game {
       },
       start: (hole = 0) => game.startRound(hole, 'round'),
       stats: () => game.world.stats(),
+      /** Render one frame and return it as a PNG data URL (reliable headless screenshots). */
+      capture: () => {
+        game.world.frame(0);
+        return game.world.renderer.domElement.toDataURL('image/png');
+      },
+      get fps() {
+        return game.fps;
+      },
     };
     const game = this;
   }
