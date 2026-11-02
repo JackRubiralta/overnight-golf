@@ -1,12 +1,15 @@
 /**
  * Sky & lighting.
- *  - Own sky dome shader (Preetham atmosphere + layered volumetric clouds + sun disc + horizon
- *    haze matched to the scene fog), see ./sky/skyShader.ts.
+ *  - Own sky dome shader (Preetham atmosphere + sun disc + horizon haze matched to the scene
+ *    fog), see ./sky/skyShader.ts.
+ *  - Raymarched volumetric clouds rendered into an amortised cube map, one face per frame
+ *    (./sky/CloudCube.ts, ./sky/cloudShader.ts). QUALITY.cloudSteps sets the march steps
+ *    (0 = single 2D layer); the cube resolution scales with the quality level.
  *  - Time-of-day presets (settings.timeOfDay) drive sun direction/colour/intensity, hemisphere
  *    fill, fog (aerial-perspective height fog, ./sky/fog.ts), exposure and cloud lighting.
  *  - Weather (settings.weather) adds cloud cover; 'rain' = overcast dome + rain streaks + uWetness.
- *  - IBL: scene.environment is a PMREM of a cheap copy of the sky (sun disc off, fewer cloud
- *    steps), regenerated only when the preset/weather changes.
+ *  - IBL: scene.environment is a PMREM of the sky dome (sun disc off, clouds from the cube),
+ *    regenerated only when the preset/weather changes.
  *  - setWind() updates the shared wind uniforms and the clouds drift with it.
  */
 import * as THREE from 'three';
@@ -14,6 +17,9 @@ import { settings, type Settings } from '../core/settings';
 import { globalUniforms, type FrameContext, type InitContext, type QualityPreset, type RenderModule } from './shared';
 import { fogShared, installHeightFog } from './sky/fog';
 import { createCloudNoiseTexture } from './sky/noiseTexture';
+import { createDetailNoise3D } from './sky/detailNoise3D';
+import { createCloudUniforms, type CloudUniforms } from './sky/cloudShader';
+import { CloudCube } from './sky/CloudCube';
 import { createSkyMaterial, createSkyUniforms, type SkyUniforms } from './sky/skyShader';
 import { TIME_PRESETS, WEATHER, type TimePreset } from './sky/presets';
 import { Rain } from './sky/Rain';
@@ -21,8 +27,10 @@ import { Rain } from './sky/Rain';
 export { TIME_PRESETS } from './sky/presets';
 
 // ---- tuning -------------------------------------------------------------------------------
-/** Cloud steps used for the IBL capture (cheap; the env map is blurred anyway). */
-const ENV_CLOUD_STEPS = 4;
+/** Cloud cube face resolution per quality level (one face is re-rendered per frame). */
+const CLOUD_CUBE_SIZE: Record<QualityPreset['level'], number> = { low: 256, medium: 512, high: 768, ultra: 1024 };
+/** March steps in the cube = QUALITY.cloudSteps × this (affordable: 1/6 of a cube per frame). */
+const CLOUD_STEP_SCALE = 2;
 /** Wind aloft relative to the near-ground wind the ball feels. */
 const CLOUD_WIND_SCALE = 4;
 const MIN_CLOUD_DRIFT = 2; // m/s, so clouds always move a little
@@ -43,6 +51,10 @@ export class SkySystem implements RenderModule {
   private ctx!: InitContext;
   private quality!: QualityPreset;
   private noise!: THREE.DataTexture;
+  private detail!: THREE.Data3DTexture;
+  /** Cloud uniforms (share uSunDir with the dome). */
+  cloudUniforms!: CloudUniforms;
+  private cloudCube!: CloudCube;
   private material!: THREE.ShaderMaterial;
   private pmrem!: THREE.PMREMGenerator;
   private envRT: THREE.WebGLRenderTarget | null = null;
@@ -60,20 +72,23 @@ export class SkySystem implements RenderModule {
     this.ctx = ctx;
     this.quality = ctx.quality;
     this.noise = createCloudNoiseTexture(256);
-    this.uniforms = createSkyUniforms(this.noise);
+    this.detail = createDetailNoise3D(64);
+    this.cloudUniforms = createCloudUniforms(this.noise, this.detail);
+    this.cloudCube = new CloudCube(this.cloudUniforms, CLOUD_CUBE_SIZE[ctx.quality.level], ctx.quality.cloudSteps * CLOUD_STEP_SCALE);
+    this.uniforms = createSkyUniforms(this.cloudCube.texture);
+    this.uniforms.uSunDir = this.cloudUniforms.uSunDir; // shared by reference
 
-    this.material = createSkyMaterial(this.uniforms, ctx.quality.cloudSteps);
+    this.material = createSkyMaterial(this.uniforms);
     this.sky = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), this.material);
     this.sky.name = 'sky';
     this.sky.scale.setScalar(1000);
     this.sky.frustumCulled = false;
-    // Draw after all opaque geometry so early-z skips every covered pixel (the shader is the
-    // most expensive per-pixel thing in the frame when clouds are on).
+    // Draw after all opaque geometry so early-z skips every covered pixel.
     this.sky.renderOrder = 1e6;
     ctx.scene.add(this.sky);
 
-    // IBL capture: same uniforms, no sun disc (avoids fireflies), fewer cloud steps.
-    this.envMaterial = createSkyMaterial({ ...this.uniforms, uSunDiscIntensity: { value: 0 } }, ENV_CLOUD_STEPS);
+    // IBL capture: same uniforms but no sun disc (avoids fireflies in the env map).
+    this.envMaterial = createSkyMaterial({ ...this.uniforms, uSunDiscIntensity: { value: 0 } });
     this.envSky = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), this.envMaterial);
     this.envSky.scale.setScalar(1000);
     this.envScene.add(this.envSky);
@@ -120,9 +135,11 @@ export class SkySystem implements RenderModule {
     u.uOvercastColor.value.copy(overcast);
 
     // Clouds
-    u.uCloudCoverage.value = THREE.MathUtils.clamp(p.cloudCoverage + w.cloudCoverage, 0, 0.95);
-    u.uCloudLit.value.set(p.cloudLit).multiplyScalar(p.cloudLitIntensity * (1 - 0.75 * w.overcast));
-    u.uCloudShade.value.set(p.cloudShade).multiplyScalar(p.cloudShadeIntensity * (1 - 0.3 * w.overcast));
+    const cu = this.cloudUniforms;
+    cu.uCloudCoverage.value = THREE.MathUtils.clamp(p.cloudCoverage + w.cloudCoverage, 0, 0.95);
+    cu.uCloudLit.value.set(p.cloudLit).multiplyScalar(p.cloudLitIntensity * (1 - 0.75 * w.overcast));
+    cu.uCloudShade.value.set(p.cloudShade).multiplyScalar(p.cloudShadeIntensity * (1 - 0.3 * w.overcast));
+    this.cloudCube.invalidate();
 
     // Direct + ambient light
     const { sun, scene, renderer } = this.ctx;
@@ -176,6 +193,8 @@ export class SkySystem implements RenderModule {
   regenerateEnvironment() {
     if (!this.envDirty) return;
     this.envDirty = false;
+    // make sure the cloud cube reflects the new lighting before capturing it
+    this.cloudCube.update(this.ctx.renderer, this.ctx.camera.position);
     // Capture from the camera's horizontal position so the clouds overhead match.
     const cam = this.ctx.camera.position;
     this.envSky.position.set(0, 0, 0);
@@ -195,16 +214,14 @@ export class SkySystem implements RenderModule {
 
   update(ctx: FrameContext) {
     this.sky.position.copy(ctx.camera.position);
-    const u = this.uniforms;
     // cloud drift: wind aloft (texture is sampled at xz + offset → subtract to move downwind)
     const wd = globalUniforms.uWindDir.value;
     const aloft = Math.max(MIN_CLOUD_DRIFT, globalUniforms.uWindSpeed.value * CLOUD_WIND_SCALE);
-    u.uCloudOffset.value.x -= wd.x * aloft * ctx.dt;
-    u.uCloudOffset.value.y -= wd.y * aloft * ctx.dt;
-    u.uCloudTime.value = ctx.time;
-    // pixel footprint (radians per pixel) for cloud texture LOD
-    const h = ctx.renderer.getDrawingBufferSize(_v2).y || 720;
-    u.uPixelAngle.value = (2 * Math.tan(THREE.MathUtils.degToRad(ctx.camera.fov) / 2)) / h;
+    const cu = this.cloudUniforms;
+    cu.uCloudOffset.value.x -= wd.x * aloft * ctx.dt;
+    cu.uCloudOffset.value.y -= wd.y * aloft * ctx.dt;
+    cu.uCloudTime.value = ctx.time;
+    this.cloudCube.update(ctx.renderer, ctx.camera.position);
 
     // rain fade
     if (this.rainAmount !== this.rainTarget) {
@@ -216,14 +233,9 @@ export class SkySystem implements RenderModule {
   }
 
   setQuality(q: QualityPreset) {
-    const stepsChanged = q.cloudSteps !== this.quality.cloudSteps;
     const levelChanged = q.level !== this.quality.level;
     this.quality = q;
-    if (stepsChanged) {
-      this.material.dispose();
-      this.material = createSkyMaterial(this.uniforms, q.cloudSteps);
-      this.sky.material = this.material;
-    }
+    this.cloudCube.configure(CLOUD_CUBE_SIZE[q.level] ?? 512, q.cloudSteps * CLOUD_STEP_SCALE);
     if (levelChanged && this.rain) {
       this.ctx.scene.remove(this.rain.mesh);
       this.rain.dispose();
@@ -246,6 +258,8 @@ export class SkySystem implements RenderModule {
     this.envSky.geometry.dispose();
     this.envMaterial.dispose();
     this.noise.dispose();
+    this.detail.dispose();
+    this.cloudCube.dispose();
     this.envRT?.dispose();
     this.pmrem.dispose();
     if (this.rain) {
@@ -255,4 +269,3 @@ export class SkySystem implements RenderModule {
   }
 }
 
-const _v2 = new THREE.Vector2();

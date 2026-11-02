@@ -29,6 +29,7 @@ import { N8AOPostPass } from 'n8ao';
 import type { PostPipeline } from './World';
 import type { FrameContext, InitContext, QualityPreset } from './shared';
 import { GradeEffect } from './post/GradeEffect';
+import { patchN8AO } from './post/n8aoCompat';
 
 // ---- tuning -------------------------------------------------------------------------------
 const BLOOM = { threshold: 1.6, smoothing: 0.5, intensity: 0.42, radius: 0.72, levels: 7 };
@@ -99,6 +100,7 @@ export class Post implements PostPipeline {
 
     if (q.ao) {
       const ao = new N8AOPostPass(scene, camera, size.x, size.y);
+      patchN8AO(ao); // must precede halfRes = true (three r187 MRT API)
       ao.configuration.transparencyAware = false; // also disables per-frame scene traversal
       ao.setQualityMode(q.level === 'ultra' ? 'Medium' : q.level === 'high' ? 'Low' : 'Performance');
       ao.configuration.halfRes = true;

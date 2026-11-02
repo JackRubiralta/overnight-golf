@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Thornbury Links — UI dev</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1410; }
+      /* Stand-in golden-hour backdrop so the glass panels can be judged without the 3D scene. */
+      #app { position: fixed; inset: 0; background:
+        radial-gradient(ellipse 60% 35% at 70% 46%, rgba(255,214,140,0.95), rgba(255,180,90,0.0) 70%),
+        linear-gradient(180deg, #6f8fb3 0%, #c9b79a 34%, #f0c27e 44%, #8a7a45 47%, #5f7a3a 52%, #3f6630 70%, #2b4a24 100%); }
+      #app::after { content: ''; position: absolute; left: 0; right: 0; top: 46%; height: 9%;
+        background: radial-gradient(ellipse 30% 100% at 25% 100%, #2c3f22 60%, transparent 61%), radial-gradient(ellipse 22% 80% at 85% 100%, #314826 60%, transparent 61%); }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="ui-root"></div>
+    <script type="module" src="/src/ui/devpage.ts"></script>
+  </body>
+</html>

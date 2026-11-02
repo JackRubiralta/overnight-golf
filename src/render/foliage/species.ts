@@ -1,0 +1,181 @@
+/**
+ * Tree / shrub species variants. Each entry becomes one instanced variant (2 LOD meshes + one
+ * impostor atlas row). Dimensions are real-world metres before per-instance scale (0.8–1.25).
+ */
+import type { SpeciesDef } from './treeGen';
+
+const oak = (name: string, seed: number, trunk: number, spread: number): SpeciesDef => ({
+  name,
+  kind: 'broadleaf',
+  seed,
+  bark: 'oak',
+  flare: 0.7,
+  barkTile: [0.9, 1.6],
+  leafTint: [0.95, 1.0, 0.85],
+  tintJitter: 0.12,
+  barkTint: [1, 1, 1],
+  lod1MinRadius: 0.05,
+  lod1LeafStep: 3,
+  levels: [
+    { children: 0, angle: 0, start: 0, length: trunk, lengthJitter: 0.1, radius: 0.42, taper: 0.6, sections: 10, segments: 10, gnarl: 0.08, tropism: 0.02 },
+    { children: 6, angle: 44, angleJitter: 10, start: 0.4, length: spread, lengthJitter: 0.2, lengthFalloff: 0.35, radius: 0.62, taper: 0.7, sections: 7, segments: 7, gnarl: 0.16, tropism: 0.055 },
+    { children: 6, angle: 46, start: 0.25, length: spread * 0.52, lengthJitter: 0.25, lengthFalloff: 0.3, radius: 0.6, taper: 0.75, sections: 5, segments: 5, gnarl: 0.22, tropism: 0.02 },
+    { children: 4, angle: 42, start: 0.2, length: 1.5, lengthJitter: 0.3, radius: 0.6, taper: 0.8, sections: 3, segments: 3, gnarl: 0.25, tropism: 0.01 },
+  ],
+  leaves: { tile: 'broadleaf', count: 4, size: 1.35, sizeJitter: 0.25, start: 0.1, angle: 35, orient: 'free', droop: 0.0, inner: 2, double: 0.6 },
+});
+
+export const SPECIES: SpeciesDef[] = [
+  oak('oakA', 11, 7, 6.2),
+  oak('oakB', 23, 6, 7),
+  // Lime / beech: taller, rounded crown with steeper limbs.
+  {
+    ...oak('lime', 37, 7, 7.5),
+    leafTint: [0.9, 1.05, 0.8],
+    levels: [
+      { children: 0, angle: 0, start: 0, length: 9, lengthJitter: 0.1, radius: 0.4, taper: 0.7, sections: 12, segments: 10, gnarl: 0.05, tropism: 0.02 },
+      { children: 8, angle: 38, angleJitter: 10, start: 0.35, length: 6.5, lengthJitter: 0.2, lengthFalloff: 0.55, radius: 0.55, taper: 0.7, sections: 7, segments: 6, gnarl: 0.14, tropism: 0.04 },
+      { children: 6, angle: 44, start: 0.25, length: 3.2, lengthJitter: 0.25, lengthFalloff: 0.3, radius: 0.6, taper: 0.75, sections: 5, segments: 5, gnarl: 0.2, tropism: 0.02 },
+      { children: 4, angle: 40, start: 0.2, length: 1.4, lengthJitter: 0.3, radius: 0.6, taper: 0.8, sections: 3, segments: 3, gnarl: 0.25, tropism: 0.0 },
+    ],
+  },
+  // Silver birch: slender white trunk, airy hanging foliage.
+  {
+    name: 'birch',
+    kind: 'broadleaf',
+    seed: 41,
+    bark: 'birch',
+    flare: 0.3,
+    barkTile: [0.7, 1.4],
+    leafTint: [1.0, 1.0, 0.85],
+    tintJitter: 0.1,
+    barkTint: [1, 1, 1],
+    lod1MinRadius: 0.035,
+    lod1LeafStep: 3,
+    levels: [
+      { children: 0, angle: 0, start: 0, length: 15, lengthJitter: 0.1, radius: 0.19, taper: 0.85, sections: 12, segments: 8, gnarl: 0.05, tropism: 0.01 },
+      { children: 16, angle: 42, angleJitter: 12, start: 0.32, length: 4.6, lengthJitter: 0.25, lengthFalloff: 0.6, radius: 0.55, taper: 0.8, sections: 6, segments: 5, gnarl: 0.18, tropism: -0.035 },
+      { children: 5, angle: 36, start: 0.2, length: 2.2, lengthJitter: 0.3, radius: 0.6, taper: 0.85, sections: 4, segments: 3, gnarl: 0.2, tropism: -0.07 },
+    ],
+    leaves: { tile: 'birch', count: 5, size: 1.15, sizeJitter: 0.25, start: 0.15, angle: 25, orient: 'free', droop: 0.55, inner: 1, double: 0.5 },
+  },
+  {
+    name: 'birchB',
+    kind: 'broadleaf',
+    seed: 53,
+    bark: 'birch',
+    flare: 0.3,
+    barkTile: [0.7, 1.4],
+    leafTint: [1.05, 1.0, 0.8],
+    tintJitter: 0.1,
+    barkTint: [1, 1, 1],
+    lod1MinRadius: 0.035,
+    lod1LeafStep: 3,
+    levels: [
+      { children: 0, angle: 0, start: 0, length: 12, lengthJitter: 0.1, radius: 0.16, taper: 0.85, sections: 10, segments: 8, gnarl: 0.07, tropism: 0.01 },
+      { children: 13, angle: 48, angleJitter: 12, start: 0.3, length: 4, lengthJitter: 0.25, lengthFalloff: 0.55, radius: 0.55, taper: 0.8, sections: 6, segments: 5, gnarl: 0.2, tropism: -0.03 },
+      { children: 5, angle: 36, start: 0.2, length: 2, lengthJitter: 0.3, radius: 0.6, taper: 0.85, sections: 4, segments: 3, gnarl: 0.2, tropism: -0.07 },
+    ],
+    leaves: { tile: 'birch', count: 5, size: 1.1, sizeJitter: 0.25, start: 0.15, angle: 25, orient: 'free', droop: 0.5, inner: 1, double: 0.5 },
+  },
+  // Scots pine: tall bare trunk, flat-topped clumpy crown.
+  {
+    name: 'pine',
+    kind: 'conifer',
+    seed: 61,
+    bark: 'pine',
+    flare: 0.4,
+    barkTile: [0.8, 1.2],
+    leafTint: [0.85, 0.95, 0.9],
+    tintJitter: 0.08,
+    barkTint: [1, 1, 1],
+    lod1MinRadius: 0.05,
+    lod1LeafStep: 3,
+    levels: [
+      { children: 0, angle: 0, start: 0, length: 19, lengthJitter: 0.1, radius: 0.3, taper: 0.8, sections: 12, segments: 9, gnarl: 0.06, tropism: 0.01 },
+      { children: 10, angle: 62, angleJitter: 12, start: 0.58, length: 4.4, lengthJitter: 0.3, lengthFalloff: 0.55, radius: 0.5, taper: 0.75, sections: 6, segments: 5, gnarl: 0.22, tropism: 0.05 },
+      { children: 6, angle: 50, start: 0.25, length: 2.0, lengthJitter: 0.3, radius: 0.55, taper: 0.8, sections: 3, segments: 3, gnarl: 0.25, tropism: 0.05 },
+    ],
+    leaves: { tile: 'conifer', count: 7, size: 1.4, sizeJitter: 0.25, start: 0.25, angle: 30, orient: 'flat', droop: 0, inner: 3, double: 0.7 },
+  },
+  // Norway spruce: dense cone to the ground (rim woods).
+  {
+    name: 'spruce',
+    kind: 'conifer',
+    seed: 71,
+    bark: 'pine',
+    flare: 0.5,
+    barkTile: [0.8, 1.2],
+    leafTint: [0.75, 0.9, 0.85],
+    tintJitter: 0.07,
+    barkTint: [0.75, 0.7, 0.7],
+    lod1MinRadius: 0.06,
+    lod1LeafStep: 3,
+    levels: [
+      { children: 0, angle: 0, start: 0, length: 20, lengthJitter: 0.1, radius: 0.32, taper: 0.95, sections: 14, segments: 8, gnarl: 0.02, tropism: 0.02 },
+      { children: 46, angle: 98, angleJitter: 8, start: 0.1, end: 0.97, length: 5.0, lengthJitter: 0.15, cone: 1.0, radius: 0.4, taper: 0.8, sections: 4, segments: 4, gnarl: 0.08, tropism: -0.015 },
+      { children: 5, angle: 55, start: 0.15, length: 1.1, lengthJitter: 0.3, radius: 0.6, taper: 0.8, sections: 2, segments: 3, gnarl: 0.15, tropism: -0.02 },
+    ],
+    leaves: { tile: 'conifer', count: 2, size: 1.25, sizeJitter: 0.2, start: 0.1, angle: 20, orient: 'flat', droop: 0.15, inner: 2, double: 0.35 },
+  },
+  {
+    name: 'spruceB',
+    kind: 'conifer',
+    seed: 83,
+    bark: 'pine',
+    flare: 0.5,
+    barkTile: [0.8, 1.2],
+    leafTint: [0.8, 0.95, 0.85],
+    tintJitter: 0.07,
+    barkTint: [0.75, 0.7, 0.7],
+    lod1MinRadius: 0.06,
+    lod1LeafStep: 3,
+    levels: [
+      { children: 0, angle: 0, start: 0, length: 14, lengthJitter: 0.1, radius: 0.25, taper: 0.95, sections: 12, segments: 8, gnarl: 0.03, tropism: 0.02 },
+      { children: 36, angle: 100, angleJitter: 10, start: 0.08, end: 0.97, length: 3.8, lengthJitter: 0.2, cone: 0.9, radius: 0.4, taper: 0.8, sections: 4, segments: 4, gnarl: 0.1, tropism: -0.02 },
+      { children: 4, angle: 55, start: 0.15, length: 1.0, lengthJitter: 0.3, radius: 0.6, taper: 0.8, sections: 2, segments: 3, gnarl: 0.15, tropism: -0.02 },
+    ],
+    leaves: { tile: 'conifer', count: 2, size: 1.15, sizeJitter: 0.2, start: 0.1, angle: 20, orient: 'flat', droop: 0.15, inner: 2, double: 0.35 },
+  },
+  // Shrubs (hazel / hawthorn-like).
+  {
+    name: 'bushA',
+    kind: 'bush',
+    seed: 97,
+    bark: 'oak',
+    flare: 0,
+    barkTile: [0.5, 1],
+    leafTint: [0.85, 0.95, 0.8],
+    tintJitter: 0.12,
+    barkTint: [0.8, 0.75, 0.7],
+    lod1MinRadius: 0.03,
+    lod1LeafStep: 3,
+    levels: [
+      { children: 0, angle: 0, start: 0, length: 0.25, radius: 0.08, taper: 0.3, sections: 1, segments: 5, gnarl: 0, tropism: 0 },
+      { children: 9, angle: 48, angleJitter: 14, start: 0.2, length: 1.9, lengthJitter: 0.3, radius: 0.5, taper: 0.8, sections: 3, segments: 3, gnarl: 0.25, tropism: 0.03 },
+      { children: 4, angle: 45, start: 0.3, length: 0.8, lengthJitter: 0.3, radius: 0.6, taper: 0.8, sections: 2, segments: 3, gnarl: 0.3, tropism: 0.0 },
+    ],
+    leaves: { tile: 'shrub', count: 3, size: 0.85, sizeJitter: 0.25, start: 0.1, angle: 35, orient: 'free', droop: 0, inner: 2, double: 0.7 },
+  },
+  {
+    name: 'bushB',
+    kind: 'bush',
+    seed: 101,
+    bark: 'oak',
+    flare: 0,
+    barkTile: [0.5, 1],
+    leafTint: [1.0, 1.0, 0.75],
+    tintJitter: 0.12,
+    barkTint: [0.8, 0.75, 0.7],
+    lod1MinRadius: 0.03,
+    lod1LeafStep: 3,
+    levels: [
+      { children: 0, angle: 0, start: 0, length: 0.2, radius: 0.07, taper: 0.3, sections: 1, segments: 5, gnarl: 0, tropism: 0 },
+      { children: 11, angle: 62, angleJitter: 14, start: 0.2, length: 1.6, lengthJitter: 0.3, radius: 0.5, taper: 0.8, sections: 3, segments: 3, gnarl: 0.25, tropism: 0.02 },
+      { children: 3, angle: 45, start: 0.3, length: 0.7, lengthJitter: 0.3, radius: 0.6, taper: 0.8, sections: 2, segments: 3, gnarl: 0.3, tropism: 0.0 },
+    ],
+    leaves: { tile: 'broadleaf', count: 3, size: 0.75, sizeJitter: 0.25, start: 0.1, angle: 35, orient: 'free', droop: 0, inner: 2, double: 0.7 },
+  },
+];
+
+export const SPECIES_INDEX: Record<string, number> = Object.fromEntries(SPECIES.map((s, i) => [s.name, i]));

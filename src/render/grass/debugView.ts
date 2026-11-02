@@ -1,8 +1,9 @@
 /**
  * Dev-only grass inspection page (not part of the game bundle):
- *   /src/render/grass/debug.html?cam=x,up,z&look=x,up,z[&tod=golden][&q=high][&post=1][&wind=8]
+ *   /src/render/grass/debug.html?cam=x,up,z&look=x,up,z[&sunlook=drop][&tod=golden][&q=high][&post=1][&wind=8]
  * Heights are relative to the ground under each point. Renders sky + terrain + grass (+ post).
  */
+import * as THREE from 'three';
 import { CourseField } from '../../course/CourseField';
 import { Course } from '../../course/Course';
 import { bakeCourse } from '../../course/bake';
@@ -31,6 +32,12 @@ async function main() {
   const [lx, lu, lz] = v(p.get('look'), [26, 0.2, 8]);
   world.camera.position.set(cx, course.height(cx, cz) + cu, cz);
   world.camera.lookAt(lx, course.height(lx, lz) + lu, lz);
+  if (p.get('sunlook')) {
+    // Look toward the sun (back-lit grass), slightly down.
+    const s = globalUniforms.uSunDir.value;
+    const d = new THREE.Vector3(s.x, 0, s.z).normalize();
+    world.camera.lookAt(world.camera.position.clone().add(d.multiplyScalar(20)).add(new THREE.Vector3(0, -Number(p.get('sunlook')), 0)));
+  }
   world.updateSunShadow(world.camera.position.clone().lerp(world.camera.position, 0.5));
   const wind = p.get('wind');
   if (wind) globalUniforms.uWindSpeed.value = Number(wind);

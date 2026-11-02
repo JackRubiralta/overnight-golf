@@ -1,10 +1,11 @@
 /**
  * Grass: GPU-instanced grass blades around the camera.
  *
- * Three concentric LOD rings, each ONE instanced draw (no per-instance attributes):
- *   ring 0 – dense, 6-row curved blades
- *   ring 1 – ¼ density, 4-row blades ~1.75× wider
- *   ring 2 – 1/16 density, 3-row blades ~3× wider, mostly camera-facing
+ * Four concentric LOD rings (two on Low), each ONE instanced draw (no per-instance attributes):
+ *   ring 0 – very dense 6-row curved blades right around the camera (mown turf reads as turf)
+ *   ring 1 – ¼ of that density, same blades
+ *   ring 2 – 1/16 density, 4-row blades 2× wider, partly camera-facing
+ *   ring 3 – 1/64 density, 3-row blades 3.5× wider, mostly camera-facing
  * Each ring is a square grid of cells snapped to the camera's cell (so blades never swim);
  * every blade's root, height, colour and shape are derived in the vertex shader from a stable
  * world-space hash plus the baked course textures (height + SDF masks). Rings cross-fade by
@@ -15,7 +16,8 @@
  */
 import * as THREE from 'three';
 import { createBladeGeometry } from './grass/bladeGeometry';
-import { GRASS_FRAGMENT_PARS, GRASS_LIGHT_OVERRIDE, GRASS_SHADOW_POS, GRASS_VERTEX_PARS } from './grass/grassShader';
+import { GRASS_FRAGMENT_PARS, GRASS_LIGHT_OVERRIDE, GRASS_MOW_SEGS, GRASS_SHADOW_POS, GRASS_VERTEX_PARS } from './grass/grassShader';
+import { buildMowData, type MowData } from './terrain/TerrainData';
 import { courseUniforms, globalUniforms, type FrameContext, type InitContext, type QualityPreset, type RenderModule } from './shared';
 
 // ---------------------------------------------------------------- tuning
@@ -79,12 +81,19 @@ export class Grass implements RenderModule {
   private ray = new THREE.Vector3();
   private camXZ = new THREE.Vector2();
   private wedge: THREE.Vector2[] | null = null;
+  /** Mowing axes (fairway centre-lines, tees) for the stripe colours on mown blades. */
+  private mow: MowData | null = null;
+  /** Shared by all rings: the fairway segments / tee nearest the camera (picked per frame). */
+  private mowSegs = Array.from({ length: GRASS_MOW_SEGS }, () => new THREE.Vector4(1e5, 1e5, 1e5 + 1, 1e5));
+  private mowTee = new THREE.Vector4(1e5, 1e5, 1, 0);
+  private mowAt = new THREE.Vector2(1e9, 1e9);
   /** Extra density multiplier (e.g. a settings slider); 1 = preset density. */
   densityScale = 1;
 
   init(ctx: InitContext) {
     this.ctx = ctx;
     this.group.name = 'grass';
+    this.mow = buildMowData();
     ctx.scene.add(this.group);
     this.build(ctx.quality);
   }
@@ -109,7 +118,32 @@ export class Grass implements RenderModule {
     const h = ctx.renderer.getDrawingBufferSize(this.tmpSize).y || 1;
     this.pixelAngle.value = (2 * Math.tan(THREE.MathUtils.degToRad(ctx.camera.fov) / 2)) / h;
     this.updateFootprint(ctx.camera);
+    this.updateMowing(cam.x, cam.z);
     for (const r of this.rings) this.fitRing(r);
+  }
+
+  /** Pick the fairway centre-line segments and the tee nearest the camera for the stripe shader. */
+  private updateMowing(x: number, z: number) {
+    const m = this.mow;
+    if (!m || Math.hypot(x - this.mowAt.x, z - this.mowAt.y) < 1) return;
+    this.mowAt.set(x, z);
+    const segDist = (s: THREE.Vector4) => {
+      const abx = s.z - s.x, abz = s.w - s.y;
+      const L2 = Math.max(abx * abx + abz * abz, 1e-6);
+      const t = Math.min(1, Math.max(0, ((x - s.x) * abx + (z - s.y) * abz) / L2));
+      return Math.hypot(x - s.x - abx * t, z - s.y - abz * t);
+    };
+    const best = m.fairwaySegs
+      .slice(0, m.fairwayCount)
+      .map((s) => ({ s, d: segDist(s) }))
+      .sort((a, b) => a.d - b.d);
+    this.mowSegs.forEach((v, i) => (best[i] ? v.copy(best[i].s) : v.set(1e5, 1e5, 1e5 + 1, 1e5)));
+    let bd = Infinity;
+    for (let i = 0; i < m.holeCount; i++) {
+      const t = m.tees[i];
+      const d = Math.hypot(t.x - x, t.y - z);
+      if (d < bd) { bd = d; this.mowTee.copy(t); }
+    }
   }
 
   /**
@@ -234,6 +268,8 @@ export class Grass implements RenderModule {
         uTransStrength: { value: TRANS_STRENGTH },
         uSpecular: { value: SPECULAR },
         uPixelAngle: this.pixelAngle,
+        uMowSegs: { value: this.mowSegs },
+        uMowTee: { value: this.mowTee },
       };
       const geo = createBladeGeometry(d.rows, SUB * SUB * d.tuft, gridN * gridN);
       const mat = createGrassMaterial(uniforms);

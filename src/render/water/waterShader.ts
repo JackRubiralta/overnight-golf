@@ -17,15 +17,15 @@ export const WATER_TUNING = {
   /** Relative slope weight of each octave. */
   octaveWeight: [0.75, 0.55, 0.38, 0.22],
   /** Base slope amplitude at calm and at ~10 m/s wind. */
-  slopeCalm: 0.06,
-  slopeWindy: 0.32,
+  slopeCalm: 0.1,
+  slopeWindy: 0.38,
   /** Gust ("cat's paw") patch size (m) and contrast. */
   gustSize: 85,
   gustContrast: 1.1,
   /** Light absorption per metre of path length (controls how fast the bed disappears). */
   absorption: 1.15,
   /** Planar-reflection UV distortion per unit slope. */
-  reflDistort: 0.11,
+  reflDistort: 0.45,
   /** Depth (m) over which the shoreline fades in, and foam band width. */
   shoreFade: 0.1,
   foamBand: 0.45,

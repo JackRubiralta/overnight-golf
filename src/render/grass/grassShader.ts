@@ -12,6 +12,11 @@
  *   direct-light loop (so it is properly shadowed) that makes back-lit blades glow at golden hour.
  */
 import { COURSE_GLSL } from '../shared';
+import { FAIRWAY_STRIPE_W, TEE_STRIPE_W } from '../terrain/terrainShader';
+
+/** Max fairway centre-line segments near the camera passed to the shader (CPU picks the nearest). */
+export const GRASS_MOW_SEGS = 4;
+const f = (v: number) => v.toFixed(4);
 
 /** Declarations + helper functions for the vertex shader (inserted after #include <common>). */
 export const GRASS_VERTEX_PARS = /* glsl */ `
@@ -33,11 +38,13 @@ uniform float uMinAngle;  // blades smaller than this angular height (rad) shrin
 uniform float uHeightMul; // global height multiplier (tuning)
 uniform float uRadius;    // overall grass radius (outer edge of the last ring)
 uniform float uPixelAngle; // angular size of one screen pixel (rad)
+uniform vec4 uMowSegs[${GRASS_MOW_SEGS}]; // nearest fairway centre-line segments (ax, az, bx, bz)
+uniform vec4 uMowTee;     // nearest tee: (cx, cz, dirX, dirZ)
 varying vec3 vGrassCol;
 varying float vGrassAO;
 varying float vGrassTrans;
 varying float vGrassSide; // -1..1 across the blade (edge darkening / midrib)
-#define MOWN_MIN_ANGLE_MUL 4.0
+#define MOWN_MIN_ANGLE_MUL 2.5
 
 uint gHash(uint x) {
   x ^= x >> 16; x *= 0x7feb352du; x ^= x >> 15; x *= 0x846ca68bu; x ^= x >> 16; return x;
@@ -49,6 +56,32 @@ float gNoise(vec2 p) {
   return mix(mix(gHash12(i), gHash12(i + vec2(1, 0)), f.x), mix(gHash12(i + vec2(0, 1)), gHash12(i + vec2(1, 1)), f.x), f.y);
 }
 float gTh(float d, float w) { return 1.0 - smoothstep(-w, w, d); }
+// Quintic value noise, bit-identical to the terrain's vnoise (so mower lines wobble identically).
+float gVnoise(vec2 x) {
+  vec2 i = floor(x); vec2 fr = fract(x); vec2 u = fr * fr * fr * (fr * (fr * 6.0 - 15.0) + 10.0);
+  float a = gHash12(i), b = gHash12(i + vec2(1, 0)), c = gHash12(i + vec2(0, 1)), d = gHash12(i + vec2(1, 1));
+  return a + (b - a) * u.x + (c - a) * u.y + (a - b - c + d) * u.x * u.y;
+}
+// Mowing stripes, mirroring the terrain splat: band sign (-1/1) across the mowing axis times the
+// view-dependent 'grain' (blades laid away from the viewer look lighter).
+float gGrain(float v) { return clamp(v * 3.0, -1.0, 1.0) * (0.3 + 0.55 * abs(v)) + 0.15; }
+float gBand(float t) { return clamp(sin(3.14159265 * t) / 0.08, -1.0, 1.0); }
+// Fairway: returns band sign, writes the mowing direction.
+float fairwayStripe(vec2 xz, out vec2 dir) {
+  float best = 1e9, lat = 0.0; dir = vec2(0.0, 1.0);
+  for (int i = 0; i < ${GRASS_MOW_SEGS}; i++) {
+    vec4 s = uMowSegs[i];
+    vec2 ab = s.zw - s.xy; float L = max(length(ab), 1e-3); vec2 d = ab / L; vec2 ap = xz - s.xy;
+    float dd = length(ap - d * clamp(dot(ap, d), 0.0, L));
+    if (dd < best) { best = dd; dir = d; lat = d.x * ap.y - d.y * ap.x < 0.0 ? -dd : dd; }
+  }
+  lat += (gVnoise(xz * 0.04) - 0.5) * 2.0;
+  return gBand(lat / ${f(FAIRWAY_STRIPE_W)} + 0.5);
+}
+float teeStripe(vec2 xz) {
+  vec2 dir = uMowTee.zw;
+  return gBand(dot(xz - uMowTee.xy, vec2(-dir.y, dir.x)) / ${f(TEE_STRIPE_W)} + 0.5);
+}
 
 vec3 grassShadowPos; // where this vertex looks up the shadow map (see GRASS_SHADOW_POS)
 void grassCull(out vec3 p, out vec3 n) { p = vec3(0.0, -1.0e4, 0.0); grassShadowPos = p; n = vec3(0.0, 1.0, 0.0); vGrassCol = vec3(0.0); vGrassAO = 1.0; vGrassTrans = 0.0; vGrassSide = 0.0; }
@@ -107,11 +140,18 @@ void grassVertex(out vec3 outPos, out vec3 outN) {
   float wGreen = gTh(mA.g, 0.08);
   float wFringe = gTh(mA.g - 1.6 + edgeN, 0.25);
   float wTee = gTh(teeD, 0.15);
-  float wCut = gTh(corr - 2.2, 0.8);           // first cut around maintained turf
+  // First cut: the collar around fairways and tees (same SDF offsets as the terrain splat).
+  float wCut = max(gTh(min(mA.r - 2.2, teeD - 1.4) + edgeN, 0.3), gTh(corr - 2.2, 0.6));
   float wDeep = smoothstep(17.0, 30.0, corr + (nBig - 0.5) * 14.0);
   float fescue = smoothstep(0.52, 0.78, gNoise(xz * 0.7 + 11.0) * 0.6 + nBig * 0.4);
   float excl = smoothstep(0.05, 0.5, mA.b) * smoothstep(0.3, 1.3, mA.a) * smoothstep(0.0, 0.45, pathD) * (1.0 - wGreen);
   if (excl <= 0.001) { grassCull(outPos, outN); return; }
+  // Mowing stripes on fairway and tee (blades are laid along ±mowDir by alternating mower passes).
+  vec2 mowDir = vec2(0.0, 1.0);
+  float band = 0.0;
+  if (wFair > 0.001) band = fairwayStripe(xz, mowDir);
+  float bandT = wTee > 0.001 ? teeStripe(xz) : 0.0;
+  vec2 viewXZ = normalize(xz - cameraPosition.xz + 1e-4);
 
   // Heights (m) per surface, with per-blade and patch variation.
   float hRough = mix(0.09, 0.2, nBig) * mix(0.55, 1.25, r2);
@@ -145,6 +185,9 @@ void grassVertex(out vec3 outPos, out vec3 outN) {
 
   // Natural lean: long blades droop away from their face, with a little sideways scatter.
   vec2 lean = fdir * mix(0.22, 0.6, longness) * (0.35 + r6) + sideV.xz * (r4 - 0.5) * 0.3 * longness;
+
+  // Mown turf lies the way the mower pushed it.
+  lean += (mowDir * band * wFair + uMowTee.zw * bandT * wTee) * 0.35 * (1.0 - longness);
 
   // ---- wind: rolling gusts (low-freq noise scrolled downwind) + per-blade flutter ----
   vec2 wd = normalize(uWindDir + 1e-5);
@@ -200,29 +243,35 @@ void grassVertex(out vec3 outPos, out vec3 outN) {
   // ---- colour (linear), matched to the terrain splat per surface ----
   // Palette mirrors the terrain splat (src/render/terrain/terrainShader.ts) so blade roots melt
   // into the ground; dark, saturated albedos (AgX tone mapping lifts them).
-  vec3 cRough = mix(vec3(0.046, 0.100, 0.020), vec3(0.062, 0.112, 0.024), nBig) * (0.8 + 0.4 * clump);
-  vec3 cDeep = mix(vec3(0.052, 0.094, 0.022), vec3(0.080, 0.108, 0.028), nMid) * (0.75 + 0.5 * clump);
-  cDeep = mix(cDeep, vec3(0.150, 0.135, 0.050) * (0.75 + 0.5 * clump), fescue * 0.3);
+  // Base albedo per surface = the terrain splat palette (src/render/terrain/terrainShader.ts, C)
+  // with similar mottling, so on average the blades melt into the ground beneath them.
+  vec3 cRough = mix(vec3(0.034, 0.085, 0.013), vec3(0.048, 0.098, 0.016), nBig) * (0.84 + 0.32 * clump) * 1.1;
+  vec3 cDeep = mix(vec3(0.045, 0.072, 0.016), vec3(0.064, 0.082, 0.022), nMid) * (0.72 + 0.56 * clump) * 1.1;
+  cDeep = mix(cDeep, vec3(0.175, 0.145, 0.062) * (0.75 + 0.5 * clump), fescue * 0.3);
   vec3 col = mix(cRough, cDeep, wDeep);
-  col = mix(col, vec3(0.060, 0.142, 0.024), wCut);
-  col = mix(col, vec3(0.082, 0.183, 0.030) * (0.93 + 0.14 * nBig), wFair);
-  col = mix(col, vec3(0.084, 0.188, 0.032), wTee);
-  col = mix(col, vec3(0.066, 0.164, 0.030), wFringe);
-  // Per-blade hue/brightness jitter and dry/straw blades in the long stuff.
-  col *= mix(0.84 + 0.14 * r2, 0.62 + 0.75 * r2 * r2 + 0.2 * r7, longness); // mown blades sit a touch darker than the turf
-  col = mix(col, col * vec3(1.22, 1.04, 0.62), r4 * longness);               // yellow-green blades
-  col = mix(col, col * vec3(0.82, 0.98, 1.12), step(r8, 0.22) * longness);   // a few blue-green ones
+  col = mix(col, vec3(0.042, 0.122, 0.015) * (0.9 + 0.2 * clump), wCut);
+  vec3 cFair = mix(vec3(0.046, 0.140, 0.015), vec3(0.072, 0.194, 0.024), 0.5 + 0.5 * band * gGrain(dot(viewXZ, mowDir)));
+  col = mix(col, cFair * (0.93 + 0.14 * nBig), wFair);
+  col = mix(col, vec3(0.058, 0.168, 0.020) * (1.0 + 0.12 * bandT * gGrain(dot(viewXZ, uMowTee.zw))), wTee);
+  col = mix(col, vec3(0.048, 0.146, 0.019), wFringe);
+  // Per-blade brightness jitter. Mown turf: centred on 1 so the average still equals the ground
+  // colour (the blades add texture, not a tint) and calming down with distance; long grass: wide
+  // spread plus yellow-green, blue-green and dry/straw blades.
+  float mownVar = 0.4 * (1.0 - smoothstep(3.0, 11.0, dist));
+  col *= mix(1.0 + (r2 - 0.5) * mownVar, 0.62 + 0.75 * r2 * r2 + 0.2 * r7, longness);
+  col = mix(col, col * vec3(1.22, 1.04, 0.62), r4 * longness);
+  col = mix(col, col * vec3(0.82, 0.98, 1.12), step(r8, 0.22) * longness);
   float dry = step(1.0 - mix(0.03, 0.2, wDeep) * longness, r6);
   col = mix(col, vec3(0.15, 0.135, 0.065), dry * 0.75);
   // Root → tip gradient: tips are lighter and warmer.
-  vec3 tip = col * mix(1.04, 1.45, longness) * mix(vec3(1.0), vec3(1.08, 1.0, 0.8), longness);
+  vec3 tip = col * mix(1.12, 1.45, longness) * mix(vec3(1.0), vec3(1.08, 1.0, 0.8), longness);
   col = mix(col, tip, smoothstep(0.2, 1.0, t) * (1.0 - 0.8 * farK));
   if (seed) col = mix(col, vec3(0.26, 0.2, 0.1), smoothstep(0.55, 0.7, t));
   col *= 1.0 + 0.14 * gust * longness;           // gusts flash the lighter blade sides
   vGrassCol = col;
 
   // Ambient occlusion at the root (deeper in long, dense grass).
-  float aoBase = mix(0.85, mix(0.4, 0.25, wDeep * clump), longness);
+  float aoBase = mix(0.72, mix(0.4, 0.25, wDeep * clump), longness);
   vGrassAO = mix(aoBase, 1.0, smoothstep(0.0, 0.85, t));
   vGrassTrans = mix(0.08, 0.85, longness) * smoothstep(0.05, 0.6, t) * (1.0 - 0.6 * farK);
 }
