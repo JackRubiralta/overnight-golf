@@ -61,7 +61,7 @@ Decisions made autonomously during the overnight build, with the reasoning. Newe
 
 ## Game flow
 
-- After a long shot you are put in first-person walking mode where you hit from, as in the original. **F** goes straight to your ball. This is an improvement for pace; research found walking can feel like padding. Short shots and shots onto the green auto-address the ball.
+- After every shot the game takes you straight to your ball, ready to address it (see User feedback below). Tab switches to first-person walking to explore, and **F** returns you to the ball.
 
 ## User feedback (overnight)
 
