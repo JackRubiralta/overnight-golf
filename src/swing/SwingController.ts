@@ -208,9 +208,12 @@ export class SwingController {
     const pad = settings.get('gamepadEnabled') ? input.padHands : null;
     if (allowSwing && pad && Math.hypot(pad.x, pad.y) > 0.12) {
       if (!this.active) {
+        if (this.sinceImpact >= 0) this.rebuildModel();
         this.active = true;
         this.sinceImpact = -1;
         this.driftT = 0;
+        this.driftSeed = Math.random() * 1000;
+        this.flail = 0;
       }
       m.grabbing = true;
       const mag = Math.min(1, Math.hypot(pad.x, pad.y));

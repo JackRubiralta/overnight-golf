@@ -156,6 +156,8 @@ export class Game {
 
   startHole(i: number, restart = false) {
     if (restart) {
+      if (this.round.holes[i].strokes !== null && this.round.splits.length) this.round.splits.pop();
+      this.round.finished = false;
       this.round.strokes = 0;
       this.round.holes[i] = { ...this.round.holes[i], strokes: null, putts: 0, fairway: null, gir: false, penalties: 0 };
     }
@@ -217,7 +219,8 @@ export class Game {
     if (this.mode !== 'paused') return;
     this.ui.hidePause();
     this.mode = this.pausePrev;
-    this.input.setContext(this.mode === 'walk' || this.mode === 'freecam' ? 'walk' : 'stance');
+    // Flight uses the walk context (mouse-look / F fast-forward), so shot keys can't change the next shot.
+    this.input.setContext(this.mode === 'walk' || this.mode === 'freecam' || this.mode === 'flight' ? 'walk' : 'stance');
   }
 
   // ───────────────────────────── helpers ─────────────────────────────
@@ -303,7 +306,6 @@ export class Game {
   goToBall() {
     const a = this.aimDir();
     this.player.copy(this.ball).addScaledVector(a, -1.2);
-    this.suggestPending = true;
     this.enterStance();
   }
 
@@ -460,7 +462,8 @@ export class Game {
       return;
     }
     if (res.impact.whiff || d.clubSpeed < 0.3) {
-      // Air shot: counts as a stroke (Rules of Golf).
+      // Air shot: counts as a stroke (Rules of Golf). Recorded so a retake replays from this spot.
+      this.history.push({ ball: this.ball.clone(), strokes: this.round.strokes });
       this.round.addStroke(false);
       this.ui.toast('Whiff! (+1)', 'bad');
       this.audio.strike('whiff', d.club.kind, speedMph, d.lie);
@@ -625,12 +628,19 @@ export class Game {
       const label = this.round.strokes === 1 ? 'HOLE IN ONE!' : names[String(diff)] ?? `${diff > 0 ? '+' : ''}${diff}`;
       this.ui.toast(`${label} — ${this.round.strokes} stroke${this.round.strokes > 1 ? 's' : ''}`, 'big');
       this.audio.crowd(diff <= -1 ? 'cheer' : 'applause');
+      this.enterHoledInput();
       this.mode = 'holed';
       this.holedTime = 0;
       this.settleTime = 0;
       return;
     }
     this.checkStrokeCap();
+  }
+
+  /** Holed / picked up: free the mouse so the scorecard is clickable; Tab/Space continue. */
+  private enterHoledInput() {
+    this.input.setContext('stance');
+    this.input.exitPointerLock();
   }
 
   /** Stroke cap so a disaster hole never ends a session. Returns true if the hole was picked up. */
@@ -640,7 +650,7 @@ export class Game {
     this.round.strokes = GAMEPLAY.maxStrokesPerHole;
     this.round.holeOut();
     this.swing.active = false;
-    this.input.exitPointerLock();
+    this.enterHoledInput();
     this.mode = 'holed';
     this.holedTime = 0;
     this.settleTime = 0;
@@ -739,8 +749,7 @@ export class Game {
     const dBall = this.distTo(this.ball);
     if (inp.pressed('toggleStance')) {
       if (dBall <= GAMEPLAY.stanceReach) {
-        this.suggestPending = true;
-        this.enterStance();
+        this.enterStance(); // keeps the player's chosen club (suggestion only after a shot/new hole)
       } else this.ui.toast(`Your ball is ${this.fmtDist(dBall)} away — walk there, or press F to go to it`, 'info');
     }
     if (inp.pressed('returnToBall')) this.goToBall();

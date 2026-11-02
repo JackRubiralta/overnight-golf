@@ -17,6 +17,12 @@ async function boot() {
   phase('navigation → boot');
   const params = new URLSearchParams(location.search);
   const view = params.get('view');
+  // `?q=low|medium|high|ultra` overrides the quality for this session (tests/benchmarks), not saved.
+  {
+    const { settings } = await import('./core/settings');
+    const q = params.get('q');
+    if (q === 'low' || q === 'medium' || q === 'high' || q === 'ultra') settings.data.quality = q;
+  }
   if (view) {
     const field = new CourseField();
     const grids = await bakeCourse(field);

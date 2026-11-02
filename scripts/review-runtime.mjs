@@ -5,7 +5,7 @@ import { chromium } from './pw.mjs';
 import fs from 'node:fs';
 
 const port = process.argv[2] || '5304';
-const parts = (process.argv[3] || 'settings,gamepad,switch,lock,flightpause,restart').split(',');
+const parts = (process.argv[3] || 'settings,gamepad,switch,lock,flightpause,retake,restart').split(',');
 const OUT = process.env.REVIEW_OUT || 'screenshots/_wip/review';
 fs.mkdirSync(OUT, { recursive: true });
 const BASE = `http://localhost:${port}`;
@@ -100,6 +100,18 @@ if (parts.includes('switch')) {
   await P.ctx.close();
 }
 
+// ── 3b. baseline captures (fresh boot per preset) to compare against post-switch captures ──
+if (parts.includes('baseline')) {
+  for (const q of ['low', 'high']) {
+    const P = await newPage({ settings: { quality: q } });
+    await P.boot('?play=0');
+    await P.frames(2);
+    await P.capture(`baseline_${q}`);
+    log(`     baseline ${q}: errors ${P.errors.join(' | ') || 'none'}`);
+    await P.ctx.close();
+  }
+}
+
 // ── 4. pointer lock kept after holing out; Space does not continue after a holed shot ──────
 if (parts.includes('lock')) {
   const P = await newPage({ init: () => Object.defineProperty(Navigator.prototype, 'webdriver', { configurable: true, get: () => false }) });
@@ -114,16 +126,19 @@ if (parts.includes('lock')) {
   const lockedInFlight = await pl();
   await P.until(() => window.__game.mode !== 'flight');
   log(`     control shot: lock in flight=${lockedInFlight}, after settle mode=${await P.page.evaluate(() => window.__game.mode)} lock=${await pl()}`);
-  // Holed putt.
-  await P.page.evaluate(() => { const p = window.__game.pin; window.__game.debugPlace(p.x + 1.2, p.z + 0.4); });
-  await P.frames(2);
-  r = await P.page.evaluate(() => window.__game.debugShot({ club: 'P', distance: Math.hypot(1.2, 0.4) + 0.4, autoAim: true }));
-  await P.page.mouse.click(320, 180);
-  await P.frames(2);
-  log(`     putt: ${JSON.stringify(r)} lock in flight=${await pl()}`);
-  const holed = await P.until(() => window.__game.mode === 'holed');
-  await P.until(() => !!document.querySelector('.tl-scorecard, .tl-card, [class*=score]') && window.__game.mode === 'holed', null, 200);
-  await P.frames(20);
+  // Holed putt (retry from wherever it stops; each putt re-grabs the mouse like a real swing would).
+  let holed = false;
+  for (let attempt = 0; attempt < 4 && !holed; attempt++) {
+    if (attempt === 0) await P.page.evaluate(() => { const p = window.__game.pin; window.__game.debugPlace(p.x + 0.6, p.z + 0.2); });
+    await P.frames(2);
+    r = await P.page.evaluate(() => window.__game.debugShot({ club: 'P', distance: window.__game.distToPin + 0.5, autoAim: true }));
+    await P.page.mouse.click(320, 180);
+    await P.frames(2);
+    log(`     putt ${attempt + 1}: ok=${r.ok} ${r.clubSpeed?.toFixed?.(2)} mph lock in flight=${await pl()}`);
+    await P.until(() => window.__game.mode !== 'flight', null, 600);
+    holed = (await P.page.evaluate(() => window.__game.mode)) === 'holed';
+  }
+  await P.frames(holed ? 24 : 2); // holed view → scorecard after 2.8 s game time
   const s = await P.page.evaluate(() => ({ mode: window.__game.mode, lock: !!document.pointerLockElement, nextBtn: [...document.querySelectorAll('button')].filter((b) => /next/i.test(b.textContent)).map((b) => b.textContent.trim()) }));
   log(`${s.lock ? 'REPRO' : 'OK   '} holed=${holed}: mode=${s.mode}, pointer still locked while the scorecard shows its buttons=${s.lock} (buttons: ${JSON.stringify(s.nextBtn)})`);
   await P.capture('lock_holed_scorecard');
@@ -172,7 +187,27 @@ if (parts.includes('flightpause')) {
   await P.ctx.close();
 }
 
-// ── 6. restart a hole after the round is finished ─────────────────────────────────────────
+// ── 6. retake after a whiff goes back to the previous shot's spot ─────────────────────────
+if (parts.includes('retake')) {
+  const P = await newPage();
+  await P.boot('?play=0');
+  await P.page.evaluate(() => { window.__game.timeScale = 8; });
+  const r1 = await P.page.evaluate(() => window.__game.debugShot({ club: 'D', clubSpeed: 95 }));
+  await P.until(() => window.__game.mode !== 'flight', null, 800);
+  const fair = await P.page.evaluate(() => ({ ball: window.__game.ball, strokes: window.__game.strokes, lie: window.__game.lie }));
+  await P.page.evaluate(() => window.__game.debugShot({ whiff: true }));
+  await P.frames(2);
+  const afterWhiff = await P.page.evaluate(() => window.__game.strokes);
+  await P.tap('Space');
+  await P.tap('Space');
+  const s = await P.page.evaluate(() => ({ ball: window.__game.ball, strokes: window.__game.strokes, lie: window.__game.lie, mode: window.__game.mode }));
+  const moved = Math.hypot(s.ball.x - fair.ball.x, s.ball.z - fair.ball.z);
+  log(`${moved > 5 ? 'REPRO' : 'OK   '} drive ok=${r1.ok} → ${fair.lie} (strokes ${fair.strokes}); whiff → strokes ${afterWhiff}; Space×2 "retake the last shot" → ball moved ${moved.toFixed(1)} m to ${s.lie}, strokes ${s.strokes}, mode ${s.mode}`);
+  log(`     errors: ${P.errors.join(' | ') || 'none'}`);
+  await P.ctx.close();
+}
+
+// ── 7. restart a hole after the round is finished ─────────────────────────────────────────
 if (parts.includes('restart')) {
   const P = await newPage();
   await P.boot('?play=0');

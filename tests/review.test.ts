@@ -45,7 +45,7 @@ describe('review: SwingController gamepad swings', () => {
   // SwingController.update(): the mouse "fresh grab" branch resets flail/driftSeed, the gamepad branch
   // (src/swing/SwingController.ts:209-214) does not, so flail from a practice swing (or a whiff)
   // leaks into the next real swing at the same address (extra toe/heel strikes and face twist).
-  it.fails('flail does not carry over from one gamepad swing to the next', async () => {
+  it('flail does not carry over from one gamepad swing to the next', async () => {
     const { SwingController } = await import('../src/swing/SwingController');
     const c: any = new SwingController();
     c.address('fairway', false, 2);
@@ -82,11 +82,11 @@ describe('review: persisted settings validation', () => {
   // constructor does QUALITY[settings.get('quality')].drawDistance and Wind does WEATHER[weather].min,
   // so one stale/invalid value (old version, manual edit, another app on the origin) throws during
   // boot, every time, until site data is cleared (reproduced in scripts/review-runtime.mjs).
-  it.fails('an unknown persisted quality falls back to a valid preset', async () => {
+  it('an unknown persisted quality falls back to a valid preset', async () => {
     const s = await load({ quality: 'epic' });
     expect(['low', 'medium', 'high', 'ultra']).toContain(s.get('quality'));
   });
-  it.fails('an unknown persisted weather falls back to a valid preset', async () => {
+  it('an unknown persisted weather falls back to a valid preset', async () => {
     const s = await load({ weather: 'storm' });
     expect(['calm', 'breezy', 'windy', 'rain']).toContain(s.get('weather'));
   });

@@ -69,11 +69,36 @@ export const DEFAULT_SETTINGS: Settings = {
 const KEY = 'tl-golf.settings.v1';
 type Listener = (s: Settings, changed: (keyof Settings)[]) => void;
 
+const ENUMS: Partial<Record<keyof Settings, readonly string[]>> = {
+  quality: ['low', 'medium', 'high', 'ultra'],
+  assist: ['off', 'light', 'full'],
+  units: ['yards', 'metres'],
+  timeOfDay: ['dawn', 'morning', 'noon', 'golden', 'dusk'],
+  weather: ['calm', 'breezy', 'windy', 'rain'],
+};
+
+/** Merge saved settings over the defaults, dropping anything of the wrong type or out of range,
+ *  so one corrupt/stale value can never stop the game from booting. */
+export function sanitizeSettings(saved: unknown): Settings {
+  const out: Settings = { ...DEFAULT_SETTINGS };
+  if (!saved || typeof saved !== 'object') return out;
+  for (const k of Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[]) {
+    const v = (saved as Record<string, unknown>)[k];
+    const def = DEFAULT_SETTINGS[k];
+    if (v === undefined || typeof v !== typeof def) continue;
+    if (typeof def === 'number' && !Number.isFinite(v as number)) continue;
+    const allowed = ENUMS[k];
+    if (allowed && !allowed.includes(v as string)) continue;
+    (out as unknown as Record<string, unknown>)[k] = v;
+  }
+  return out;
+}
+
 class SettingsStore {
   data: Settings;
   private listeners = new Set<Listener>();
   constructor() {
-    this.data = { ...DEFAULT_SETTINGS, ...(safeLoad<Partial<Settings>>(KEY) ?? {}) };
+    this.data = sanitizeSettings(safeLoad<Partial<Settings>>(KEY));
   }
   get<K extends keyof Settings>(k: K): Settings[K] {
     return this.data[k];

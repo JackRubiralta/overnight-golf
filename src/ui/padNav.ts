@@ -34,7 +34,12 @@ export class PadNav {
   }
 
   private poll(dt: number) {
-    const pads = navigator.getGamepads();
+    let pads: (Gamepad | null)[] = [];
+    try {
+      pads = navigator.getGamepads ? Array.from(navigator.getGamepads()) : [];
+    } catch {
+      return; // gamepad access blocked (permissions policy)
+    }
     let gp: Gamepad | null = null;
     for (const p of pads) if (p && p.connected) gp = gp ?? p;
     if (!gp) return;
