@@ -291,6 +291,11 @@ for (const [hi, hole] of holes.entries()) {
       await capture(`h${hole + 1}-green`);
     }
     const first = s.strokes === 0;
+    if (!first && s.lie !== 'green') {
+      // Address on a fairway/rough lie (often sloped): golfer stance and ball visibility.
+      await frames(4);
+      await capture(`h${hole + 1}-addr-${s.strokes + 1}-${s.lie}`);
+    }
     const res = await playStroke(p, first ? { fast: false, shots: { mid: `h${hole + 1}-flight`, midFrames: 12, settle: `h${hole + 1}-settle` } } : { fast: true, shots: {} });
     if (!res) break;
     if (first && res.restCam) camCheck('after the tee shot (settle view)', res.restCam, res.before.ball.y !== undefined ? res.restCam.ball : res.after.ball, { maxUp: 7, maxDist: 20 });
