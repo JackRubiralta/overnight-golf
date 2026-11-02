@@ -32,7 +32,7 @@ The defaults follow the controls of the game that inspired this one; RESEARCH.md
 | **1–5** | Driver, Hybrid, Iron, Wedge, Putter |
 | **Mouse wheel** | Cycle clubs *(improvement)* |
 | **Tab** | Back to walking |
-| **Space** | Retake the last shot under stroke-and-distance (+1) |
+| **Space ×2** | Retake the last shot under stroke-and-distance (+1). Press twice within 2 s to confirm, so it can't happen by accident. |
 | **Mouse / right stick** (in flight) | Look around: orbit the camera around the flying ball *(improvement)* |
 | **W / S** (in flight) | Zoom the flight camera in / out |
 | **F** (hold, in flight) | Fast-forward the ball *(improvement)* |

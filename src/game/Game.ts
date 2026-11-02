@@ -70,6 +70,7 @@ export class Game {
   private fastForward = false;
   private ballFlightPos = new THREE.Vector3();
   private time = 0;
+  private retakeArmedAt = -10;
   /** Shots this hole that can be retaken (ball positions before each stroke). */
   private history: { ball: THREE.Vector3; strokes: number }[] = [];
 
@@ -394,7 +395,16 @@ export class Game {
       this.swing.practice = !this.swing.practice;
       this.ui.toast(this.swing.practice ? 'Practice swing — the ball is safe' : 'Practice off — live ball', 'info');
     }
-    if (this.input.pressed('retake') && !this.swing.active) this.retake();
+    if (this.input.pressed('retake') && !this.swing.active) {
+      // Retake costs a penalty and undoes the last shot, so it needs a confirming second press.
+      if (this.time - this.retakeArmedAt < 2) {
+        this.retakeArmedAt = -10;
+        this.retake();
+      } else if (this.history.length) {
+        this.retakeArmedAt = this.time;
+        this.ui.toast('Press Space again to retake the last shot (+1 penalty)', 'info');
+      } else this.ui.toast('Nothing to retake yet', 'info');
+    }
     if (this.input.pressed('freeCam') && !this.swing.active) {
       this.freePrev = 'stance';
       this.mode = 'freecam';
@@ -477,7 +487,7 @@ export class Game {
   }
 
   private updateFlight(dt: number) {
-    if (this.input.held('returnToBall') || this.input.held('retake')) this.fastForward = true;
+    if (this.input.held('returnToBall')) this.fastForward = true;
     const scale = this.fastForward ? 3.5 : 1;
     // BallSim.update caps one call at 0.1 s; feed larger fast-forward steps in chunks.
     for (let rem = dt * scale; rem > 1e-6 && this.sim.moving; rem -= 0.1) {
@@ -616,15 +626,12 @@ export class Game {
   private afterSettle() {
     this.shot = null;
     this.suggestPending = true;
-    // Walk from where you hit (the original makes you walk). Quick option: F to go to the ball.
-    const dist = Math.hypot(this.ball.x - this.prevBall.x, this.ball.z - this.prevBall.z);
-    if (dist < 25 || this.lie() === 'green') {
-      this.goToBall();
-    } else {
-      const aim = this.aimDir();
-      this.player.copy(this.prevBall).addScaledVector(aim, -1);
-      this.enterWalk();
-    }
+    // New spot, new line: aim resets to the pin (face/path/stance offsets persist, as in the original).
+    this.swing.aim = 0;
+    // Golf first: go straight to the ball, ready to address it. (Previously a long shot left you
+    // walking from the spot you hit from, i.e. back on the tee after a drive, which felt like having
+    // to hit the drive again.) Tab still switches to walking to explore.
+    this.goToBall();
   }
 
   private updateHoled(dt: number) {

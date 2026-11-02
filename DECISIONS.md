@@ -86,3 +86,4 @@ Decisions made autonomously during the overnight build, with the reasoning. Newe
   | Typical good drive | ~245 yd | ~275 yd |
 
   Over-swinging now mostly adds error (face flail), not distance.
+- **No more "hitting the drive twice"**: after a long shot the game used to drop you, in walking mode, where you hit from (on the tee after a drive). That looked and felt like a forced replay. The game now always takes you straight to your ball, ready to address it; Tab still lets you walk. Space no longer doubles as fast-forward (that's **F**). A retake (stroke and distance, +1) needs Space pressed twice within 2 s.
