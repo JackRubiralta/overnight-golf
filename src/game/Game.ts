@@ -75,7 +75,8 @@ export class Game {
   private time = 0;
   private retakeArmedAt = -10;
   /** Shots this hole that can be retaken (ball positions before each stroke). */
-  private history: { ball: THREE.Vector3; strokes: number }[] = [];
+  /** Ball spots before each stroke; `penalized` = that shot already cost a penalty (water/OOB). */
+  private history: { ball: THREE.Vector3; strokes: number; penalized?: boolean }[] = [];
 
   constructor(
     public world: World,
@@ -597,12 +598,14 @@ export class Game {
       this.ball.copy(this.pin);
     } else if (st === 'water') {
       this.round.addPenalty(GAMEPLAY.penaltyWater);
+      if (this.history.length) this.history[this.history.length - 1].penalized = true;
       this.ui.toast('Water hazard — penalty stroke. Dropped near where it went in.', 'bad');
       this.audio.crowd('groan');
       this.placeBall(this.findDrop(shot?.origin ?? this.prevBall));
       result = 'water';
     } else if (st === 'oob') {
       this.round.addPenalty(GAMEPLAY.penaltyOOB);
+      if (this.history.length) this.history[this.history.length - 1].penalized = true;
       this.ui.toast('Out of bounds — stroke and distance.', 'bad');
       this.placeBall(this.prevBall);
       result = 'oob';
@@ -683,12 +686,14 @@ export class Game {
       this.ui.toast('Nothing to retake yet', 'info');
       return;
     }
-    // Stroke-and-distance: return to the previous spot; the stroke stays and one penalty is added.
-    this.round.addPenalty(1);
+    // Stroke-and-distance: return to the previous spot; the stroke stays and ONE penalty applies.
+    // If that shot already took a water/OOB penalty, replaying is the alternative relief for the
+    // same penalty (Rules of Golf), so no second penalty is added.
+    if (!last.penalized) this.round.addPenalty(1);
     this.placeBall(last.ball);
     this.prevBall.copy(last.ball);
     (this.mods.effects as { clearAll?: () => void }).clearAll?.() ?? this.mods.effects.clearTracers();
-    this.ui.toast('Retake — stroke and distance (+1)', 'info');
+    this.ui.toast(last.penalized ? 'Replaying from the previous spot (penalty already counted)' : 'Retake — stroke and distance (+1)', 'info');
     this.suggestPending = false;
     if (this.checkStrokeCap()) return;
     this.enterStance();
