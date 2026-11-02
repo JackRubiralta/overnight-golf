@@ -97,3 +97,39 @@ Decisions made autonomously during the overnight build, with the reasoning. Newe
   | Iron, hybrid, woods, driver | 100% | Unchanged |
 
   Big, comfortable mouse motions now make small, controllable strokes. This replaces the old putter-only pixel scale.
+
+## Performance budgets (polish pass)
+
+Each budget covers one frame and counts every pass: main, shadow, water reflection, cloud cube face and post.
+
+| Preset | Budget (calls / tris) | Tee, measured | Worst view, measured |
+|---|---|---|---|
+| Low | 120 / 1M | 73 / 0.57M | 73 / 0.57M |
+| Medium | 200 / 2M | 141 / 1.05M | 189 / 1.44M (water) |
+| High (default) | 250 / 3M | 179 / 2.05M | 203 / 2.75M (water) |
+| Ultra | 350 / 6M | 215 / 4.29M | 216 / 5.66M |
+
+- **Load time:**
+  - Course-independent resources are prepared while the bake runs.
+  - All shaders are compiled before the first frame, in parallel where supported.
+  - Cloud-cube warm-up drops from 72 face renders to 30.
+  - Headless load fell from 58 s to 30 s; about 90% of what remains is SwiftShader compiling shaders.
+- **The water reflection only renders when a pond is visible**, scissored to the pond's area.
+- **Shadow-only copies of terrain and foliage** hold just the instances inside the shadow camera's view.
+- **Dynamic props are frustum-culled** per site.
+- **F3** opens the performance overlay. `PERF_BUDGETS` lives in `src/render/shared.ts`.
+
+## Visual polish
+
+- **Fog density cut 2–3×.** The scattered fog light is far brighter than lit turf, so the old density made every view look milky. Golden hour's base fog is now neutral grey and only turns warm toward the sun.
+- **Greens toned down.** The colour grade warms strong greens slightly and takes some saturation out, so turf no longer looks neon.
+- **Pollen motes stay smaller than a golf ball** (at most 2.8 cm and 9 px on screen).
+- **Noon exposure lowered.** The cloud undersides are also shaded better.
+
+## Camera and rules (playtest pass)
+
+- **After the ball stops:** the camera glides to about 6 m behind and beside the ball, 2.3 m up. In flight it rises only about 40% of the ball's height.
+- **At address:** the ball sits about 13° below centre so the HUD never covers it. When putting, the camera sits on the line.
+- **Water relief:** the ball is dropped back along the line it entered the water on.
+- **Aim** resets to the pin after every shot. Face, path and stance persist, as in the original.
+- **Saved settings are validated on load**, so a stale value can never stop the game from booting.
