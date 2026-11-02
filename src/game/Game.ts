@@ -175,7 +175,8 @@ export class Game {
     this.suggestPending = true;
     this.player.copy(this.ball);
     this.enterStance();
-    this.rig.snap(this.ball.clone().addScaledVector(this.aimDir(), -4).add(new THREE.Vector3(0, 2, 0)), this.ball.clone().addScaledVector(this.aimDir(), 40));
+    // Start framed at the address view (a huge dt makes the damped camera land on its target).
+    this.rig.address(this.ball, this.aimDir(), 10, this.swing.club.kind === 'putter');
     const dist = this.distToPin();
     this.ui.holeIntro(h.number, h.name, h.par, dist, h.blurb);
   }
@@ -350,6 +351,9 @@ export class Game {
       default:
         break;
     }
+    // The swing whoosh only plays while actually swinging; fade it out everywhere else
+    // (otherwise it stays stuck at the downswing level through the flight and while walking).
+    if (this.mode !== 'stance' && this.mode !== 'swing') this.audio.swingUpdate(0);
     if (this.mode !== 'paused' && this.mode !== 'title') this.round.tick(dt, true);
 
     // Ball & uniforms

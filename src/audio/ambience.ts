@@ -9,9 +9,9 @@ import { clamp, rand, type Synth } from './synth';
 
 const WIND = {
   /** Low rumble layer: level at 0 and per m/s, lowpass cutoff at 0 and per m/s. */
-  lowBase: 0.05, lowPer: 0.025, lowCut: 220, lowCutPer: 45,
+  lowBase: 0.03, lowPer: 0.014, lowCut: 200, lowCutPer: 35,
   /** Airy layer (bandpass). */
-  airBase: 0.012, airPer: 0.012, airF: 500, airFPer: 70,
+  airBase: 0.007, airPer: 0.007, airF: 500, airFPer: 60,
   maxSpeed: 16,
   /** Gust targets change every gustMin..gustMax s and are approached with gustTau. */
   gustMin: 1.4, gustMax: 4.5, gustTau: 1.1,

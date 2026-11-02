@@ -24,7 +24,7 @@ import { clamp, Synth } from './synth';
 /** Reverb send level for SFX (open air: subtle). */
 const REVERB_SEND = 0.1;
 /** Swing whoosh: speed (mph) where it starts, level curve, filter mapping. */
-const WHOOSH = { start: 8, full: 105, gain: 0.5, f0: 260, fPerMph: 24, q0: 0.9, qPerMph: 1 / 110 };
+const WHOOSH = { start: 8, full: 105, gain: 0.35, f0: 260, fPerMph: 24, q0: 0.9, qPerMph: 1 / 110 };
 /** Peak-speed swish fires when the speed drops below this fraction of the running max. */
 const SWISH_DROP = 0.96;
 const SWISH_MIN_MPH = 40;
