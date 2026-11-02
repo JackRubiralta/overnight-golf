@@ -81,7 +81,7 @@ export const PERF_BUDGETS: Record<QualityLevel, { calls: number; triangles: numb
   low: { calls: 120, triangles: 1_000_000 },
   medium: { calls: 200, triangles: 2_000_000 },
   high: { calls: 250, triangles: 3_000_000 },
-  ultra: { calls: 350, triangles: 4_500_000 },
+  ultra: { calls: 350, triangles: 6_000_000 },
 };
 
 export interface FrameContext {
