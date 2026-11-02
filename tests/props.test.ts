@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Quaternion, Vector3 } from 'three';
 import { StaticIndex, SweepAccumulator, makePrimitive, sweepPrimitive, type SweepResult } from '../src/props/collision';
+import { PROP_SITES } from '../src/props/sites';
+import { CourseField } from '../src/course/CourseField';
 
 const R = 0.021335;
 const res = (): SweepResult => ({ t: 0, normal: new Vector3(), point: new Vector3() });
@@ -65,5 +67,10 @@ describe('prop collision primitives', () => {
     acc.reset();
     idx.forEachNear(a, b, R, (p) => acc.test(p, a, b, R));
     expect(acc.best?.id).toBe('t4');
+  });
+
+  it('hittable prop sites stay off fairways, greens, tees, bunkers and water', () => {
+    const f = new CourseField();
+    for (const site of PROP_SITES) expect(['rough', 'deepRough', 'path', 'dirt'], site.name).toContain(f.surface(site.x, site.z));
   });
 });

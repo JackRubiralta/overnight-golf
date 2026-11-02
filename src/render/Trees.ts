@@ -62,7 +62,7 @@ const LODS: Record<QualityPreset['level'], LodDistances> = {
   ultra: { l0: 80, l1: 300, b0: 34, b1: 130, bushFar: 400, rock0: 60, rockFar: 520, flowerFar: 110, impTile: 256, lod1Shadows: true },
 };
 /** Fade band half-widths as a fraction of the switch distance. */
-const BAND = 0.14;
+const BAND = 0.08;
 /** Shrubs / rocks / flower patches relative to treeCount. */
 const BUSH_RATIO = 0.7;
 const ROCK_RATIO = 0.22;

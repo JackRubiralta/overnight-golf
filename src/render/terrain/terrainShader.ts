@@ -66,6 +66,17 @@ vec3 terrainDisplace(vec3 p, out vec3 nrmW) {
 }
 `;
 
+// ------------------------------------------------------------------ horizon ring vertex
+/** Vertex pars / injection for the far ring (plain geometry with baked normals). */
+export const TERRAIN_FAR_VERTEX_PARS = /* glsl */ `
+varying vec3 vWorldPos;
+varying vec2 vFarGrad;
+`;
+export const TERRAIN_FAR_VERTEX = /* glsl */ `
+vWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+vFarGrad = -normal.xz / max(normal.y, 0.2);
+`;
+
 // ------------------------------------------------------------------ fragment
 export const TERRAIN_FRAGMENT_PARS = /* glsl */ `
 #define MAX_FAIRWAY_SEGS ${MAX_FAIRWAY_SEGS}
@@ -79,6 +90,9 @@ uniform int uFairCount;
 uniform vec4 uGreens[MAX_HOLES];
 uniform vec4 uTees[MAX_HOLES];
 uniform int uHoleCount;
+#ifdef TERRAIN_FAR
+varying vec2 vFarGrad;
+#endif
 ${COURSE_GLSL}
 
 // Detail outputs consumed by the roughness / normal stages.
@@ -199,7 +213,11 @@ tSpec = 0.12;
   float fp = max(0.002, max(fwMin, 0.55 * fwMax));      // metres per pixel
   vec2 viewXZ = normalize(xz - uCameraPos.xz + vec2(1e-4));
 
+  #ifdef TERRAIN_FAR
+  vec4 sl = vec4(vFarGrad, 0.0, -0.3);   // horizon ring: slope from vertex normals, convex
+  #else
   vec4 sl = texture2D(uSlopeTex, courseUV(xz));
+  #endif
   tSlopeG = sl.xy;
   float slope = 1.0 - inversesqrt(1.0 + dot(sl.xy, sl.xy)); // 1 - n.y
   float curvS = sl.z;   // + hollow / - bump (few metres)
