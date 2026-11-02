@@ -87,6 +87,23 @@ export class CloudCube {
     this.needsWarmup = true;
   }
 
+  /**
+   * Render all six faces once from `pos` without the warm-up accumulation and without marking
+   * the cube as refreshed: good enough for the (heavily blurred) IBL capture at load or after a
+   * lighting change, while the next update() still does the full, converged refresh from the
+   * real camera position (perf: the load-time capture used to cost a 24-face refresh at the
+   * world origin that the first frame then threw away).
+   */
+  updateQuick(renderer: THREE.WebGLRenderer, pos: THREE.Vector3) {
+    const keep = this.lastFull.clone();
+    const warm = this.needsWarmup;
+    this.needsWarmup = false;
+    this.lastFull.set(Infinity, 0, 0);
+    this.update(renderer, pos);
+    this.lastFull.copy(keep);
+    this.needsWarmup = warm;
+  }
+
   /** Render one face (or all six after invalidate()/a camera jump) from `pos`. */
   update(renderer: THREE.WebGLRenderer, pos: THREE.Vector3) {
     const full = !(pos.distanceToSquared(this.lastFull) < JUMP_DIST * JUMP_DIST);

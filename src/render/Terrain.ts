@@ -12,8 +12,8 @@
  * the sun shadow pass (shadow-only copies holding just the chunks inside the shadow frustum).
  */
 import * as THREE from 'three';
-import { courseUniforms, globalUniforms, type FrameContext, type InitContext, type QualityPreset, type RenderModule } from './shared';
-import { ChunkSelector, LOD_STEPS, SHADOW_LAYER, buildChunks, buildLevelGeometry, lodSwitchDistances, morphWindows, shadowCastingLevel } from './terrain/ChunkGrid';
+import { SHADOW_LAYER, courseUniforms, globalUniforms, type FrameContext, type InitContext, type QualityPreset, type RenderModule } from './shared';
+import { ChunkSelector, LOD_STEPS, buildChunks, buildLevelGeometry, lodSwitchDistances, morphWindows, shadowCastingLevel } from './terrain/ChunkGrid';
 import { bakeSlopeTexture, buildMowData } from './terrain/TerrainData';
 import { buildFarRingGeometry } from './terrain/FarRing';
 import {
@@ -30,6 +30,9 @@ import {
 /** Shader detail level per quality preset (0 = cheapest). */
 const DETAIL_BY_QUALITY: Record<QualityPreset['level'], number> = { low: 0, medium: 1, high: 2, ultra: 2 };
 const PROGRAM_KEY = 'thornbury-terrain-v2';
+
+const _tmpV = new THREE.Vector3();
+const _tmpV2 = new THREE.Vector3();
 
 export class Terrain implements RenderModule {
   readonly perfName = 'terrain';
@@ -48,6 +51,8 @@ export class Terrain implements RenderModule {
   private sun: THREE.DirectionalLight | null = null;
   private shadowFrustum = new THREE.Frustum();
   private shadowPV = new THREE.Matrix4();
+  /** Direction the sunlight travels (world), updated with the shadow frustum. */
+  private shadowDir = new THREE.Vector3(0, -1, 0);
   private selector!: ChunkSelector;
   private levelUniforms: { uStep: THREE.IUniform<number>; uMorph: THREE.IUniform<THREE.Vector2> }[] = [];
   private detail = 2;
@@ -123,13 +128,11 @@ export class Terrain implements RenderModule {
     this.selector = new ChunkSelector(chunks, this.meshes);
     this.selector.shadowMeshes = this.shadowMeshes;
     this.sun = ctx.sun;
-    // The sun's shadow camera must see the shadow-only layer (the views never do).
-    ctx.sun.shadow.camera.layers.enable(SHADOW_LAYER);
     ctx.scene.add(this.group);
     this.setQuality(ctx.quality);
     // Select chunks once so the very first frame is complete.
     ctx.camera.updateMatrixWorld();
-    this.selector.update(ctx.camera, this.computeShadowFrustum());
+    this.selector.update(ctx.camera, this.computeShadowFrustum(), this.shadowDir);
   }
 
   setQuality(q: QualityPreset) {
@@ -149,7 +152,7 @@ export class Terrain implements RenderModule {
 
   update(ctx: FrameContext) {
     ctx.camera.updateMatrixWorld();
-    this.selector.update(ctx.camera, this.computeShadowFrustum());
+    this.selector.update(ctx.camera, this.computeShadowFrustum(), this.shadowDir);
   }
 
   /** Frustum of the sun's shadow camera as it will be rendered this frame (null: no shadows). */
@@ -160,6 +163,7 @@ export class Terrain implements RenderModule {
     sun.target.updateMatrixWorld();
     sun.shadow.updateMatrices(sun);
     const cam = sun.shadow.camera;
+    this.shadowDir.subVectors(sun.target.getWorldPosition(_tmpV), sun.getWorldPosition(_tmpV2)).normalize();
     this.shadowPV.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
     return this.shadowFrustum.setFromProjectionMatrix(this.shadowPV);
   }

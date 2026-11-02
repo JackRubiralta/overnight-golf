@@ -199,8 +199,9 @@ export class SkySystem implements RenderModule {
   regenerateEnvironment() {
     if (!this.envDirty) return;
     this.envDirty = false;
-    // make sure the cloud cube reflects the new lighting before capturing it
-    this.cloudCube.update(this.ctx.renderer, this.ctx.camera.position);
+    // make sure the cloud cube reflects the new lighting before capturing it (a quick 6-face
+    // pass: the capture is blurred anyway; the next update() does the converged refresh)
+    this.cloudCube.updateQuick(this.ctx.renderer, this.ctx.camera.position);
     // Capture at the camera height (the dome shader's haze depends on it); clouds come from the cube.
     const cam = this.ctx.camera.position;
     this.envSky.position.set(0, 0, 0);

@@ -15,7 +15,7 @@
  *    resolution and LOD1 shadow casting scale with the preset.
  */
 import * as THREE from 'three';
-import type { FrameContext, InitContext, QualityPreset, RenderModule } from './shared';
+import { SHADOW_LAYER, type FrameContext, type InitContext, type QualityPreset, type RenderModule } from './shared';
 import { bakeImpostors, impostorFrame } from './foliage/impostor';
 import { LodSystem, Sink, type Group, type LevelDef } from './foliage/lod';
 import { LEAF_ALPHA_TEST, createImpostorMaterial, lodUniform, patchFoliage, type LodUniform } from './foliage/materials';
@@ -105,12 +105,16 @@ export class Foliage implements RenderModule {
     rock1: lodUniform(),
     flower: lodUniform(),
   };
-  private treeSinks: { lod0: Sink; lod1: Sink; meshes: THREE.InstancedMesh[] }[] = [];
-  private rockSinks: { lod0: Sink; lod1: Sink; meshes: THREE.InstancedMesh[] }[] = [];
+  private treeSinks: { lod0: Sink; lod1: Sink; lod0Shadow: Sink; lod1Shadow: Sink; meshes: THREE.InstancedMesh[] }[] = [];
+  private rockSinks: { lod0: Sink; lod1: Sink; lod0Shadow: Sink; meshes: THREE.InstancedMesh[] }[] = [];
   private flowerSinks: Sink[] = [];
   private impostorSink!: Sink;
   private impFrames: ReturnType<typeof impostorFrame>[] = [];
   private disposables: { dispose(): void }[] = [];
+  private sun: THREE.DirectionalLight | null = null;
+  private shadowFrustum = new THREE.Frustum();
+  private shadowPV = new THREE.Matrix4();
+  private shadowAnchor = new THREE.Vector3();
 
   private prepared: { leafAtlas: ReturnType<typeof createLeafAtlas>; flowerAtlas: ReturnType<typeof createFlowerAtlas>; bark: Record<BarkKind, BarkTextures>; variants: Variant[] } | null = null;
 
@@ -129,6 +133,7 @@ export class Foliage implements RenderModule {
 
   init(ctx: InitContext) {
     const t0 = performance.now();
+    this.sun = ctx.sun;
     this.quality = ctx.quality;
     this.group.name = 'foliage';
     ctx.scene.add(this.group);
@@ -205,7 +210,9 @@ export class Foliage implements RenderModule {
       };
       const lod0 = mk(v.lod0, u0, 0);
       const lod1 = mk(v.lod1, u1, 1);
-      return { lod0, lod1, meshes: [...lod0.meshes, ...lod1.meshes] };
+      const lod0Shadow = this.shadowCopy(lod0, capByVariant[vi]);
+      const lod1Shadow = this.shadowCopy(lod1, capByVariant[vi]);
+      return { lod0, lod1, lod0Shadow, lod1Shadow, meshes: [...lod0.meshes, ...lod1.meshes] };
     });
 
     // ---- shared impostor draw
@@ -236,7 +243,7 @@ export class Foliage implements RenderModule {
       };
       const lod0 = mk(3, this.lodU.rock0);
       const lod1 = mk(1, this.lodU.rock1);
-      return { lod0, lod1, meshes: [...lod0.meshes, ...lod1.meshes] };
+      return { lod0, lod1, lod0Shadow: this.shadowCopy(lod0, capRock[ri]), meshes: [...lod0.meshes, ...lod1.meshes] };
     });
 
     // ---- wildflower patches (2 mixes, 1 LOD, no shadow casting)
@@ -266,7 +273,45 @@ export class Foliage implements RenderModule {
   }
 
   update(ctx: FrameContext) {
-    this.lod.update(ctx.camera);
+    this.lod.update(ctx.camera, this.shadowInfo());
+  }
+
+  /** Sun shadow frustum as it will be rendered this frame (World.updateSunShadow ran already). */
+  private shadowInfo(): { frustum: THREE.Frustum; anchor: THREE.Vector3 } | null {
+    const sun = this.sun;
+    if (!sun || !sun.castShadow || !sun.visible) return null;
+    sun.updateMatrixWorld();
+    sun.target.updateMatrixWorld();
+    sun.shadow.updateMatrices(sun);
+    const cam = sun.shadow.camera;
+    this.shadowPV.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    this.shadowFrustum.setFromProjectionMatrix(this.shadowPV);
+    // anchor = the sun's position: moves with the shadow focus and with the light direction
+    return { frustum: this.shadowFrustum, anchor: sun.getWorldPosition(this.shadowAnchor) };
+  }
+
+  /**
+   * Shadow-only copy of a LOD level's meshes (perf): same geometry, materials and depth
+   * materials, drawn only by the sun's shadow camera (SHADOW_LAYER) with its own instance list.
+   * Shares the main meshes' instanceColor attribute so main and depth programs are identical to
+   * the main meshes' (no extra shader variants to compile).
+   */
+  private shadowCopy(main: Sink, capacity: number): Sink {
+    const copies = main.meshes.map((m) => {
+      const c = new THREE.InstancedMesh(m.geometry, m.material, 1);
+      c.customDepthMaterial = m.customDepthMaterial;
+      c.castShadow = true;
+      c.receiveShadow = false;
+      c.layers.set(SHADOW_LAYER);
+      c.userData.wantsColor = false;
+      c.name = `${m.name}-shadow`;
+      this.group.add(c);
+      return c;
+    });
+    const sink = new Sink(copies, capacity, false);
+    copies.forEach((c, k) => (c.instanceColor = main.meshes[k].instanceColor));
+    for (const m of main.meshes) m.castShadow = false;
+    return sink;
   }
 
   setQuality(q: QualityPreset) {
@@ -307,15 +352,8 @@ export class Foliage implements RenderModule {
     set(this.lodU.flower, flower);
     const v4 = (r: readonly number[]) => new THREE.Vector4(r[0], r[1], r[2], r[3]);
 
-    // Shadow casting per LOD.
-    for (const s of this.treeSinks) {
-      for (const m of s.lod0.meshes) m.castShadow = true;
-      for (const m of s.lod1.meshes) m.castShadow = L.lod1Shadows;
-    }
-    for (const s of this.rockSinks) {
-      for (const m of s.lod0.meshes) m.castShadow = true;
-      for (const m of s.lod1.meshes) m.castShadow = false;
-    }
+    // Shadow casting per LOD: the main meshes never cast; the shadow-only copies (filled by the
+    // LOD system from the sun's shadow frustum) do, for the levels that cast at this quality.
 
     // Instance subsets for this quality.
     const nTree = Math.max(q.treeCount, inPlayCount(P.trees));
@@ -352,8 +390,8 @@ export class Foliage implements RenderModule {
         }
       });
       const levels: LevelDef[] = [
-        { sink: this.treeSinks[vi].lod0, range: v4(isBush ? bush0 : tree0), shadow: true },
-        { sink: this.treeSinks[vi].lod1, range: v4(isBush ? bush1 : tree1), shadow: L.lod1Shadows },
+        { sink: this.treeSinks[vi].lod0, range: v4(isBush ? bush0 : tree0), shadow: true, shadowSink: this.treeSinks[vi].lod0Shadow },
+        { sink: this.treeSinks[vi].lod1, range: v4(isBush ? bush1 : tree1), shadow: L.lod1Shadows, shadowSink: this.treeSinks[vi].lod1Shadow },
       ];
       g.levels = levels;
       g.impostor = { sink: this.impostorSink, imp: [vi, fr.halfW, fr.yMax, fr.yMin], range: v4(isBush ? bushImp : treeImp) };
@@ -378,7 +416,7 @@ export class Foliage implements RenderModule {
         true,
       );
       g.levels = [
-        { sink: this.rockSinks[ri].lod0, range: v4(rock0), shadow: true },
+        { sink: this.rockSinks[ri].lod0, range: v4(rock0), shadow: true, shadowSink: this.rockSinks[ri].lod0Shadow },
         { sink: this.rockSinks[ri].lod1, range: v4(rock1), shadow: false },
       ];
       groups.push(g);

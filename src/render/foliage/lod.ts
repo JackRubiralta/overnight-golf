@@ -9,8 +9,13 @@
  * The fade itself happens on the GPU (complementary dither per pixel on the exact distance), so the
  * CPU lists only need to be conservative and LOD switches never pop.
  *
- * Off-screen instances are still emitted for shadow-casting levels within `shadowKeep` metres, so
- * trees behind the camera keep casting shadows into view.
+ * Shadow casters: a level with a `shadowSink` (shadow-only InstancedMeshes on SHADOW_LAYER, see
+ * shared.ts) gets every in-range instance whose bounds intersect the sun's shadow frustum,
+ * visible or not, while its main sink holds only the instances in view (perf: in-view trees far
+ * outside the ±shadowDistance shadow map no longer go through the shadow pass, and off-screen
+ * casters no longer go through the main pass). Levels without a shadowSink fall back to the old
+ * rule: off-screen instances within `shadowKeep` metres are kept in the main sink when the level
+ * casts shadows.
  */
 import * as THREE from 'three';
 
@@ -74,6 +79,8 @@ export interface LevelDef {
   /** Fade-in start/end, fade-out start/end (m) — must match the material's LOD uniform. */
   range: THREE.Vector4;
   shadow: boolean;
+  /** Shadow-only copy of the level (used when `shadow`): filled from the shadow frustum. */
+  shadowSink?: Sink;
 }
 
 export interface Group {
@@ -111,12 +118,19 @@ export class LodSystem {
   private lastDir = new THREE.Vector3();
   private dirty = true;
   shadowKeep = 150;
+  /** Sun shadow frustum for the shadow sinks (null: no shadow casters). */
+  private shadowFrustum: THREE.Frustum | null = null;
+  private lastShadow = new THREE.Vector3(1e9, 0, 0);
+  private sphere = new THREE.Sphere();
 
   setGroups(groups: Group[]) {
     this.groups = groups;
     this.sinks.clear();
     for (const g of groups) {
-      for (const l of g.levels) this.sinks.add(l.sink);
+      for (const l of g.levels) {
+        this.sinks.add(l.sink);
+        if (l.shadowSink) this.sinks.add(l.shadowSink);
+      }
       if (g.impostor) this.sinks.add(g.impostor.sink);
     }
     // Spatial grid.
@@ -146,13 +160,21 @@ export class LodSystem {
     this.dirty = true;
   }
 
-  update(camera: THREE.Camera) {
+  /**
+   * `shadow`: the sun shadow camera's frustum and a point that moves with it (the sun's
+   * position), or null when nothing casts shadows.
+   */
+  update(camera: THREE.Camera, shadow: { frustum: THREE.Frustum; anchor: THREE.Vector3 } | null = null) {
     const cp = camera.getWorldPosition(new THREE.Vector3());
     const cd = camera.getWorldDirection(new THREE.Vector3());
-    if (!this.dirty && cp.distanceToSquared(this.lastPos) < MOVE_EPS * MOVE_EPS && 1 - cd.dot(this.lastDir) < TURN_EPS) return;
+    const shadowMoved = shadow ? shadow.anchor.distanceToSquared(this.lastShadow) >= MOVE_EPS * MOVE_EPS : this.shadowFrustum !== null;
+    if (!this.dirty && !shadowMoved && cp.distanceToSquared(this.lastPos) < MOVE_EPS * MOVE_EPS && 1 - cd.dot(this.lastDir) < TURN_EPS) return;
     this.dirty = false;
     this.lastPos.copy(cp);
     this.lastDir.copy(cd);
+    this.shadowFrustum = shadow ? shadow.frustum : null;
+    if (shadow) this.lastShadow.copy(shadow.anchor);
+    const sf = this.shadowFrustum;
     this.pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(this.pm);
     for (const s of this.sinks) s.count = 0;
@@ -161,12 +183,28 @@ export class LodSystem {
       const dBox = c.box.distanceToPoint(cp);
       if (dBox > c.reach + SLACK) continue;
       const vis = this.frustum.intersectsBox(c.box);
-      if (!vis && dBox > keep) continue;
+      const inShadow = sf !== null && sf.intersectsBox(c.box);
+      if (!vis && dBox > keep && !inShadow) continue;
       for (const { g, i } of c.items) {
         const dx = g.pos[i * 3] - cp.x, dy = g.pos[i * 3 + 1] - cp.y, dz = g.pos[i * 3 + 2] - cp.z;
         const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        let casts = -1; // lazily evaluated per-instance shadow-frustum test
         for (const l of g.levels) {
           if (d < l.range.x - SLACK || d > l.range.w + SLACK) continue;
+          if (l.shadowSink) {
+            if (vis) push(l.sink, g, i);
+            if (l.shadow && inShadow) {
+              if (casts < 0) {
+                const sc = g.scale[i];
+                const h = g.height * sc * 0.5;
+                this.sphere.center.set(g.pos[i * 3], g.pos[i * 3 + 1] + h, g.pos[i * 3 + 2]);
+                this.sphere.radius = Math.max(g.radius * sc, h);
+                casts = sf!.intersectsSphere(this.sphere) ? 1 : 0;
+              }
+              if (casts) push(l.shadowSink, g, i);
+            }
+            continue;
+          }
           if (!vis && (!l.shadow || d > keep)) continue;
           push(l.sink, g, i);
         }

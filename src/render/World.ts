@@ -9,7 +9,7 @@ import { settings } from '../core/settings';
 import { phase, markStart, gpuSync, PERF_SYNC } from './perf/timing';
 import { FrameStats, type FrameStatsSnapshot } from './perf/FrameStats';
 import { PerfHud } from './perf/PerfHud';
-import { PERF_BUDGETS, QUALITY, createCourseTextures, globalUniforms, type CourseTextures, type FrameContext, type InitContext, type QualityPreset, type RenderModule } from './shared';
+import { PERF_BUDGETS, QUALITY, SHADOW_LAYER, createCourseTextures, globalUniforms, type CourseTextures, type FrameContext, type InitContext, type QualityPreset, type RenderModule } from './shared';
 
 export interface PostPipeline {
   init(ctx: InitContext): void | Promise<void>;
@@ -66,6 +66,8 @@ export class World {
     this.sun.castShadow = true;
     this.sun.shadow.bias = -0.0002;
     this.sun.shadow.normalBias = 0.03;
+    // The shadow camera also renders the shadow-only caster copies (terrain, foliage).
+    this.sun.shadow.camera.layers.enable(SHADOW_LAYER);
     this.scene.add(this.sun);
     this.scene.add(this.sun.target);
     this.hemi = new THREE.HemisphereLight(0xbfd6ff, 0x5a6b3a, 0.6);

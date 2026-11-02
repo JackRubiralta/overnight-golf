@@ -133,7 +133,8 @@ export class CameraRig {
     if (dir.lengthSq() < 1e-6) dir.set(0, 0, -1);
     dir.normalize();
     this.targetPos.copy(settleCamTarget(ball, dir, !!opts.close, (x, z) => this.camGround(x, z)));
-    this.targetLook.copy(ball).addScaledVector(UP, 0.15);
+    // Look a little past the ball so the ball sits below centre with the hole ahead in view.
+    this.targetLook.copy(ball).addScaledVector(dir, opts.close ? 1.2 : 5).addScaledVector(UP, 0.1);
     damp(this.pos, this.targetPos, 2.2, dt);
     this.keepAboveGround(0.8);
     damp(this.look, this.targetLook, 5, dt);

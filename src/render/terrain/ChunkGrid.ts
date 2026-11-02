@@ -27,8 +27,9 @@ const LOD_MIN_GAP = 200;
 const MORPH_FRACTION = 0.3;
 /** Levels that cast sun shadows (far levels are outside the shadow frustum anyway). */
 export const SHADOW_LEVELS = 2;
-/** Object layer of shadow-only meshes: the sun's shadow camera renders it, the views don't. */
-export const SHADOW_LAYER = 1;
+/** Extra light-space depth (m) beyond the deepest visible receiver chunk before casters are
+ *  dropped (objects standing on off-screen ground, rounding). */
+const RECEIVER_DEPTH_MARGIN = 40;
 
 export interface ChunkInfo {
   i0: number;
@@ -147,39 +148,89 @@ export class ChunkSelector {
   switchDist: number[] = lodSwitchDistances(1);
   /** Shadow-caster meshes per shadow-casting level (may be empty: then no shadow selection). */
   shadowMeshes: THREE.InstancedMesh[] = [];
+  private levels = new Int8Array(0);
+  private flags = new Uint8Array(0);
 
   constructor(private chunks: ChunkInfo[], private meshes: THREE.InstancedMesh[]) {}
 
-  /** `shadowFrustum`: the sun shadow camera's frustum (null = no shadow casters this frame). */
-  update(camera: THREE.Camera, shadowFrustum: THREE.Frustum | null = null) {
+  /**
+   * `shadowFrustum`: the sun shadow camera's frustum (null = no shadow casters this frame).
+   * `lightDir`: direction the sunlight travels. Shadow receivers that matter are the chunks in
+   * view and inside the shadow frustum; a caster lying entirely deeper (along the light) than the
+   * deepest of them cannot shadow anything visible and is skipped (with a low sun the shadow
+   * frustum is a ~1.2 km strip; looking into the sun, its downstream half is behind the camera).
+   */
+  update(camera: THREE.Camera, shadowFrustum: THREE.Frustum | null = null, lightDir: THREE.Vector3 | null = null) {
     this.m.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(this.m);
-    const counts = this.meshes.map(() => 0);
-    const sCounts = this.shadowMeshes.map(() => 0);
+    const n = this.chunks.length;
+    if (this.levels.length < n) {
+      this.levels = new Int8Array(n);
+      this.flags = new Uint8Array(n);
+    }
     const cam = camera.position;
-    for (const c of this.chunks) {
+    // pass 1: level, visibility, shadow-frustum membership, deepest visible receiver
+    let deepest = -Infinity;
+    for (let i = 0; i < n; i++) {
+      const c = this.chunks[i];
       const d = c.box.distanceToPoint(cam);
       let level = 0;
       while (level < this.switchDist.length && d >= this.switchDist[level]) level++;
-      if (shadowFrustum && level < this.shadowMeshes.length && shadowFrustum.intersectsBox(c.box)) {
-        this.tmp.makeTranslation(c.origin.x, 0, c.origin.z);
-        this.shadowMeshes[level].setMatrixAt(sCounts[level]++, this.tmp);
-      }
-      if (!this.frustum.intersectsBox(c.box)) continue;
-      const mesh = this.meshes[level];
-      this.tmp.makeTranslation(c.origin.x, 0, c.origin.z);
-      mesh.setMatrixAt(counts[level]++, this.tmp);
+      const inView = this.frustum.intersectsBox(c.box);
+      const inShadow = shadowFrustum !== null && shadowFrustum.intersectsBox(c.box);
+      this.levels[i] = level;
+      this.flags[i] = (inView ? 1 : 0) | (inShadow ? 2 : 0);
+      if (inView && inShadow && lightDir) deepest = Math.max(deepest, maxDepth(c.box, lightDir));
     }
-    const finish = (mesh: THREE.InstancedMesh, n: number) => {
-      mesh.count = n;
-      mesh.visible = n > 0;
+    // no visible receiver chunk (e.g. only sky/canopy in view): keep every caster
+    const limit = deepest === -Infinity ? Infinity : deepest + RECEIVER_DEPTH_MARGIN;
+    // pass 2: write instances
+    const counts = this.meshes.map(() => 0);
+    const sCounts = this.shadowMeshes.map(() => 0);
+    for (let i = 0; i < n; i++) {
+      const c = this.chunks[i];
+      const level = this.levels[i];
+      const f = this.flags[i];
+      if (f & 2 && level < this.shadowMeshes.length && !(lightDir && minDepth(c.box, lightDir) > limit)) {
+        // Off-screen casters only throw shadows onto other chunks, so they can use the next
+        // coarser shadow level (≤ a few cm of shift); visible chunks keep their own level so
+        // their self-shadowing matches the rendered surface exactly.
+        const sl = f & 1 ? level : Math.min(level + 1, this.shadowMeshes.length - 1);
+        this.tmp.makeTranslation(c.origin.x, 0, c.origin.z);
+        this.shadowMeshes[sl].setMatrixAt(sCounts[sl]++, this.tmp);
+      }
+      if (!(f & 1)) continue;
+      this.tmp.makeTranslation(c.origin.x, 0, c.origin.z);
+      this.meshes[level].setMatrixAt(counts[level]++, this.tmp);
+    }
+    const finish = (mesh: THREE.InstancedMesh, k: number) => {
+      mesh.count = k;
+      mesh.visible = k > 0;
       mesh.instanceMatrix.needsUpdate = true;
       mesh.instanceMatrix.clearUpdateRanges();
-      mesh.instanceMatrix.addUpdateRange(0, Math.max(1, n) * 16);
+      mesh.instanceMatrix.addUpdateRange(0, Math.max(1, k) * 16);
     };
     this.meshes.forEach((mesh, k) => finish(mesh, counts[k]));
     this.shadowMeshes.forEach((mesh, k) => finish(mesh, sCounts[k]));
   }
+}
+
+/** Smallest dot(p, dir) over the corners of a box. */
+export function minDepth(b: THREE.Box3, dir: THREE.Vector3): number {
+  return (
+    (dir.x > 0 ? dir.x * b.min.x : dir.x * b.max.x) +
+    (dir.y > 0 ? dir.y * b.min.y : dir.y * b.max.y) +
+    (dir.z > 0 ? dir.z * b.min.z : dir.z * b.max.z)
+  );
+}
+
+/** Largest dot(p, dir) over the corners of a box. */
+export function maxDepth(b: THREE.Box3, dir: THREE.Vector3): number {
+  return (
+    (dir.x > 0 ? dir.x * b.max.x : dir.x * b.min.x) +
+    (dir.y > 0 ? dir.y * b.max.y : dir.y * b.min.y) +
+    (dir.z > 0 ? dir.z * b.max.z : dir.z * b.min.z)
+  );
 }
 
 export function shadowCastingLevel(k: number) {

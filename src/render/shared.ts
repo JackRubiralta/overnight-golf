@@ -65,6 +65,13 @@ export const QUALITY: Record<QualityLevel, QualityPreset> = {
 };
 
 /**
+ * Object layer of shadow-only meshes (perf): the sun's shadow camera renders layers 0 and
+ * SHADOW_LAYER, the view/reflection cameras only layer 0. Modules use it for copies of their
+ * casters that hold just the instances inside the shadow frustum (terrain chunks, foliage).
+ */
+export const SHADOW_LAYER = 1;
+
+/**
  * Per-preset render budgets for one frame, ALL passes included (main + sun shadow + water
  * reflection + cloud-cube face + post). Checked by the F3 perf overlay (outlined red when
  * exceeded) and by the headless budget measurements (see DECISIONS.md). Target: 60 fps at 1440p
