@@ -82,6 +82,7 @@ export class CourseField {
   private n2 = new Simplex2(4242);
   holes: HoleCache[] = [];
   private practiceH: number | null = null;
+  private clubhouseH: number | null = null;
 
   constructor() {
     for (const def of HOLES) {
@@ -283,6 +284,15 @@ export class CourseField {
         if (d < 0) h = Math.min(h, waterLevel - 0.25 - 1.6 * smoothstep(0, 9, -d));
         else h = Math.min(h, lerp(waterLevel + 0.05, h, smoothstep(0, 10, d)));
       }
+    }
+    // Clubhouse pad: level ground under and around the building.
+    const ch = LANDMARKS.clubhouse.c;
+    const cdx = x - ch[0];
+    const cdz = z - ch[1];
+    const cd = Math.hypot(cdx, cdz);
+    if (cd < 60) {
+      if (this.clubhouseH === null) this.clubhouseH = this.corridorHeight(ch[0], ch[1]) + 0.2;
+      h = lerp(h, this.clubhouseH, 1 - smoothstep(26, 55, cd));
     }
     // Practice green by the clubhouse: a gently tilted putting surface.
     const pg = LANDMARKS.practiceGreen;
