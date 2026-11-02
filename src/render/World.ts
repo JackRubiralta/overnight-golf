@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import type { Course } from '../course/Course';
 import type { CourseGrids } from '../course/CourseField';
 import { settings } from '../core/settings';
+import { phase, markStart, gpuSync } from './perf/timing';
 import { QUALITY, createCourseTextures, globalUniforms, type CourseTextures, type FrameContext, type InitContext, type QualityPreset, type RenderModule } from './shared';
 
 export interface PostPipeline {
@@ -89,16 +90,22 @@ export class World {
       quality: this.quality,
       sun: this.sun,
     };
+    phase('course textures');
     for (const m of modules) {
+      markStart();
       try {
         await m.init?.(this.initCtx);
       } catch (e) {
         console.error('Render module init failed', m, e);
       }
+      gpuSync(this.renderer.getContext());
+      phase(`init ${m.constructor.name}`);
     }
     if (post) {
+      markStart();
       try {
         await post.init(this.initCtx);
+        phase('init Post');
       } catch (e) {
         console.error('Post pipeline init failed, falling back to direct rendering', e);
         this.post = null;

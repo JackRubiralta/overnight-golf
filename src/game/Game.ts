@@ -20,6 +20,7 @@ import { CameraRig } from '../camera/CameraRig';
 import { BallSim, type BallEvent } from '../physics/BallSim';
 import { computeLaunch, launchToWorld, type LaunchData } from '../physics/impact';
 import { BAG, SwingController, type SwingResult } from '../swing/SwingController';
+import { nominalDelivery, solveSpeed, syntheticImpact, type DebugShotOpts } from '../swing/debugShot';
 import { Wind } from './Wind';
 import { Round } from './Round';
 
@@ -38,7 +39,10 @@ interface PendingShot {
 
 export class Game {
   mode: GameMode = 'loading';
-  private prevMode: GameMode = 'walk';
+  /** Mode to return to after pause / the scorecard overlay / the survey camera. */
+  private pausePrev: GameMode = 'walk';
+  private cardPrev: GameMode = 'walk';
+  private freePrev: GameMode = 'walk';
   input: Input;
   audio: AudioSystem;
   ui: UI;
@@ -85,7 +89,7 @@ export class Game {
       onRestartHole: () => this.startHole(this.round.current, true),
       onNextHole: () => this.nextHole(),
       onCloseScorecard: () => {
-        if (this.mode === 'scorecard') this.mode = this.prevMode;
+        if (this.mode === 'scorecard') this.mode = this.cardPrev;
       },
     };
     this.rig = new CameraRig(world.camera, course);
@@ -188,7 +192,12 @@ export class Game {
 
   pause() {
     if (this.mode === 'paused' || this.mode === 'title' || this.mode === 'loading') return;
-    this.prevMode = this.mode;
+    if (this.mode === 'scorecard') {
+      // Pausing over the scorecard closes it (otherwise resume would land in an invisible card).
+      this.ui.hideScorecard();
+      this.mode = this.cardPrev;
+    }
+    this.pausePrev = this.mode;
     this.mode = 'paused';
     this.input.setContext('menu');
     this.input.exitPointerLock();
@@ -198,8 +207,8 @@ export class Game {
   resume() {
     if (this.mode !== 'paused') return;
     this.ui.hidePause();
-    this.mode = this.prevMode;
-    this.input.setContext(this.mode === 'walk' ? 'walk' : 'stance');
+    this.mode = this.pausePrev;
+    this.input.setContext(this.mode === 'walk' || this.mode === 'freecam' ? 'walk' : 'stance');
   }
 
   // ───────────────────────────── helpers ─────────────────────────────
@@ -235,7 +244,7 @@ export class Game {
     return Math.hypot(p.x - this.ball.x, p.z - this.ball.z);
   }
 
-  private lie(): SurfaceId {
+  lie(): SurfaceId {
     return this.course.surface(this.ball.x, this.ball.z);
   }
 
@@ -247,7 +256,8 @@ export class Game {
     if (lie === 'fringe' && d < 12) return 4;
     if (d < 95) return 3;
     if (d < 150) return 2;
-    if (d < 185 || !teed) return d < 185 ? 1 : 1;
+    // Driver only off a tee; otherwise the hybrid is the longest club.
+    if (d < 185 || !teed) return 1;
     return 0;
   }
 
@@ -279,7 +289,7 @@ export class Game {
   }
 
   /** Put the player beside the ball, ready to address it. */
-  private goToBall() {
+  goToBall() {
     const a = this.aimDir();
     this.player.copy(this.ball).addScaledVector(a, -1.2);
     this.suggestPending = true;
@@ -309,9 +319,9 @@ export class Game {
     if (this.input.pressed('scorecard') && this.mode !== 'title' && this.mode !== 'paused') {
       if (this.mode === 'scorecard') {
         this.ui.hideScorecard();
-        this.mode = this.prevMode;
+        this.mode = this.cardPrev;
       } else if (this.mode !== 'holed') {
-        this.prevMode = this.mode;
+        this.cardPrev = this.mode;
         this.mode = 'scorecard';
         this.ui.showScorecard(this.round.view(), false);
       }
@@ -377,7 +387,8 @@ export class Game {
       this.ui.toast(this.swing.practice ? 'Practice swing — the ball is safe' : 'Practice off — live ball', 'info');
     }
     if (this.input.pressed('retake') && !this.swing.active) this.retake();
-    if (this.input.pressed('freeCam')) {
+    if (this.input.pressed('freeCam') && !this.swing.active) {
+      this.freePrev = 'stance';
       this.mode = 'freecam';
       return;
     }
@@ -420,6 +431,7 @@ export class Game {
       this.round.addStroke(false);
       this.ui.toast('Whiff! (+1)', 'bad');
       this.audio.strike('whiff', d.club.kind, speedMph, d.lie);
+      this.checkStrokeCap();
       return;
     }
     const launch = computeLaunch(d);
@@ -436,6 +448,7 @@ export class Game {
     this.mode = 'flight';
     this.input.exitPointerLock();
     this.rig.startFlight();
+    this.rig.setFlightDir(aim);
     this.ui.hideShotReport();
     this.fastForward = false;
     // Feedback
@@ -488,7 +501,7 @@ export class Game {
     // Ball has stopped.
     if (this.settleTime === 0) this.onBallStopped();
     this.settleTime += dt;
-    this.rig.settle(this.sim.pos, dt);
+    this.rig.settle(this.sim.pos, dt, { close: this.shot?.result.delivery.club.kind === 'putter' || this.sim.lastSurface === 'green' });
     if (this.mode === 'flight' && this.settleTime > 1.6) {
       this.settleTime = 0;
       this.afterSettle();
@@ -560,15 +573,21 @@ export class Game {
       this.settleTime = 0;
       return;
     }
-    // Stroke cap so a disaster hole never ends a session.
-    if (this.round.strokes >= GAMEPLAY.maxStrokesPerHole) {
-      this.ui.toast(`Stroke limit reached — picking up.`, 'bad');
-      this.round.strokes = GAMEPLAY.maxStrokesPerHole;
-      this.round.holeOut();
-      this.mode = 'holed';
-      this.holedTime = 0;
-      this.settleTime = 0;
-    }
+    this.checkStrokeCap();
+  }
+
+  /** Stroke cap so a disaster hole never ends a session. Returns true if the hole was picked up. */
+  private checkStrokeCap(): boolean {
+    if (this.round.strokes < GAMEPLAY.maxStrokesPerHole) return false;
+    this.ui.toast(`Stroke limit reached — picking up.`, 'bad');
+    this.round.strokes = GAMEPLAY.maxStrokesPerHole;
+    this.round.holeOut();
+    this.swing.active = false;
+    this.input.exitPointerLock();
+    this.mode = 'holed';
+    this.holedTime = 0;
+    this.settleTime = 0;
+    return true;
   }
 
   private afterSettle() {
@@ -587,7 +606,7 @@ export class Game {
 
   private updateHoled(dt: number) {
     this.holedTime += dt;
-    this.rig.settle(this.pin, dt);
+    this.rig.settle(this.ball, dt, { close: true });
     if (this.holedTime > 2.8 && this.holedTime - dt <= 2.8) {
       this.ui.showScorecard(this.round.view(), this.round.finished);
     }
@@ -621,6 +640,7 @@ export class Game {
     (this.mods.effects as { clearAll?: () => void }).clearAll?.() ?? this.mods.effects.clearTracers();
     this.ui.toast('Retake — stroke and distance (+1)', 'info');
     this.suggestPending = false;
+    if (this.checkStrokeCap()) return;
     this.enterStance();
   }
 
@@ -670,7 +690,7 @@ export class Game {
     }
     if (inp.pressed('returnToBall')) this.goToBall();
     if (inp.pressed('freeCam')) {
-      this.prevMode = 'walk';
+      this.freePrev = 'walk';
       this.mode = 'freecam';
     }
     this.hint = dBall <= GAMEPLAY.stanceReach ? 'Tab: address the ball' : `WASD walk · Shift run · F go to ball (${this.fmtDist(dBall)}) · RMB rangefinder · Ctrl crouch`;
@@ -688,7 +708,7 @@ export class Game {
     this.rig.free(move, dt);
     this.hint = 'Survey camera — WASD fly · Shift fast · V exit';
     if (inp.pressed('freeCam') || inp.pressed('toggleStance')) {
-      if (this.prevMode === 'walk') this.enterWalk();
+      if (this.freePrev === 'walk') this.enterWalk();
       else this.enterStance();
     }
   }
@@ -785,6 +805,80 @@ export class Game {
     };
   }
 
+  // ───────────────────────────── debug / play-test ─────────────────────────────
+
+  private resolveClub(c: number | string | undefined): number {
+    if (c === undefined) return this.swing.clubIndex;
+    if (typeof c === 'number') return Math.max(0, Math.min(BAG.length - 1, Math.round(c)));
+    const i = BAG.findIndex((b) => b.id === c);
+    return i >= 0 ? i : this.swing.clubIndex;
+  }
+
+  /**
+   * Simulate (off-screen, no props) where a synthetic shot would finish. Distances are measured
+   * from the ball along / across the ball→pin line. The cup is ignored so putt speeds solve for
+   * "die just past the hole".
+   */
+  debugPredict(o: DebugShotOpts & { clubSpeed: number }) {
+    const club = BAG[this.resolveClub(o.club)];
+    const saveAim = this.swing.aim;
+    if (o.aim !== undefined) this.swing.aim = o.aim;
+    const aim = this.aimDir();
+    this.swing.aim = saveAim;
+    const d = nominalDelivery(club, o.clubSpeed, this.swing.lie, o);
+    const launch = computeLaunch(d, () => 0.5);
+    const { velocity, spin } = launchToWorld(launch, aim);
+    const sim = new BallSim({ terrain: this.course, wind: this.sim.opts.wind, cup: null, rng: () => 0.5 });
+    sim.place(this.ball);
+    sim.pos.y = this.ball.y;
+    sim.launch(velocity, spin);
+    sim.simulate();
+    const p = this.pin;
+    const line = new THREE.Vector3(p.x - this.ball.x, 0, p.z - this.ball.z);
+    if (line.lengthSq() < 1e-6) line.set(0, 0, -1);
+    line.normalize();
+    const dx = sim.pos.x - this.ball.x;
+    const dz = sim.pos.z - this.ball.z;
+    return {
+      along: dx * line.x + dz * line.z,
+      lateral: dx * -line.z + dz * line.x,
+      state: sim.state,
+      end: { x: sim.pos.x, y: sim.pos.y, z: sim.pos.z },
+      carry: sim.carryPos ? Math.hypot(sim.carryPos.x - this.ball.x, sim.carryPos.z - this.ball.z) : 0,
+    };
+  }
+
+  /**
+   * Play a stroke from the current ball position without a mouse swing, through the same
+   * pipeline as a real impact (onImpact → flight → settle → penalties/report …).
+   * Returns the delivery actually used, or { ok: false } if a shot can't be played now.
+   */
+  debugShot(o: DebugShotOpts = {}) {
+    if (this.mode === 'walk' || this.mode === 'freecam') this.goToBall();
+    if (this.mode !== 'stance' || this.swing.active) return { ok: false as const, mode: this.mode };
+    this.swing.setClub(this.resolveClub(o.club));
+    const club = this.swing.club;
+    if (o.aim !== undefined) this.swing.aim = o.aim;
+    let mph = o.clubSpeed;
+    if (mph === undefined && o.distance !== undefined) {
+      const target = o.distance;
+      for (let it = 0; it < (o.autoAim ? 4 : 1); it++) {
+        mph = solveSpeed((v) => this.debugPredict({ ...o, aim: this.swing.aim, clubSpeed: v }).along, target, 1, club.kind === 'putter' ? 25 : 135);
+        if (!o.autoAim) break;
+        const pr = this.debugPredict({ ...o, aim: this.swing.aim, clubSpeed: mph });
+        const errDeg = (Math.atan2(pr.lateral, Math.max(0.5, pr.along)) * 180) / Math.PI;
+        if (Math.abs(errDeg) < 0.05) break;
+        this.swing.aim -= errDeg;
+      }
+    }
+    mph ??= club.refSpeedMph;
+    const d = nominalDelivery(club, mph, this.swing.lie, o);
+    const res: SwingResult = { impact: syntheticImpact(d, !!o.whiff), delivery: d, practice: o.practice ?? this.swing.practice };
+    const strokesBefore = this.round.strokes;
+    this.onImpact(res, this.aimDir());
+    return { ok: true as const, club: club.id, clubSpeed: mph, aim: this.swing.aim, strokesBefore, mode: this.mode };
+  }
+
   /** Hooks for automated Playwright tests. */
   private exposeTestHooks() {
     window.__game = {
@@ -811,6 +905,47 @@ export class Game {
         return game.sim.state;
       },
       start: (hole = 0) => game.startRound(hole, 'round'),
+      /** Play a synthetic stroke through the real impact pipeline (see DebugShotOpts). */
+      debugShot: (o: DebugShotOpts = {}) => game.debugShot(o),
+      /** Predict where a synthetic stroke would finish (no side effects). */
+      debugPredict: (o: DebugShotOpts & { clubSpeed: number }) => game.debugPredict(o),
+      /** Walk straight to the ball and address it (same as F). */
+      goToBall: () => game.goToBall(),
+      /** Aim offset relative to the pin line (deg, + right). */
+      setAim: (deg: number) => {
+        game.swing.aim = deg;
+      },
+      get pin() {
+        const p = game.pin;
+        return { x: p.x, y: p.y, z: p.z };
+      },
+      get lie() {
+        return game.lie();
+      },
+      get distToPin() {
+        return game.distToPin();
+      },
+      get player() {
+        return { x: game.player.x, y: game.player.y, z: game.player.z };
+      },
+      get club() {
+        return { index: game.swing.clubIndex, id: game.swing.club.id };
+      },
+      get cam() {
+        const c = game.world.camera;
+        const dir = new THREE.Vector3();
+        c.getWorldDirection(dir);
+        return { mode: game.rig.mode, x: c.position.x, y: c.position.y, z: c.position.z, ground: game.course.height(c.position.x, c.position.z), dir: { x: dir.x, y: dir.y, z: dir.z } };
+      },
+      get round() {
+        return game.round.view();
+      },
+      get hint() {
+        return game.hint;
+      },
+      get settled() {
+        return game.mode !== 'flight';
+      },
       stats: () => game.world.stats(),
       /** Render one frame and return it as a PNG data URL (reliable headless screenshots). */
       capture: () => {

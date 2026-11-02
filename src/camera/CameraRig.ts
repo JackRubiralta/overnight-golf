@@ -29,6 +29,7 @@ export class CameraRig {
   private targetLook = new THREE.Vector3();
   private shake = 0;
   private flightTime = 0;
+  private flightDir = new THREE.Vector3(0, 0, -1);
   orbitT = 0;
 
   constructor(camera: THREE.PerspectiveCamera, course: Course) {
@@ -78,13 +79,22 @@ export class CameraRig {
     this.flightTime = 0;
   }
 
-  /** Chase the ball in flight from behind/above, settling as it lands. */
+  /**
+   * Chase the ball in flight from behind. The camera rises only part of the way with the ball
+   * (so the ball is seen against the sky at its apex) and comes back down as the ball descends,
+   * ending a few metres above the ground behind the ball when it lands and rolls.
+   */
   flight(ball: THREE.Vector3, vel: THREE.Vector3, origin: THREE.Vector3, dt: number) {
     this.mode = 'flight';
     this.flightTime += dt;
     const horiz = new THREE.Vector3(vel.x, 0, vel.z);
     const sp = horiz.length();
-    const dir = sp > 0.5 ? horiz.normalize() : new THREE.Vector3().subVectors(ball, origin).setY(0).normalize();
+    const fromOrigin = new THREE.Vector3().subVectors(ball, origin).setY(0);
+    const dir = sp > 0.5 ? horiz.normalize() : fromOrigin.lengthSq() > 1e-4 ? fromOrigin.normalize() : this.flightDir.clone();
+    // Smooth the travel direction so bounces/lip-outs don't whip the camera around.
+    this.flightDir.lerp(dir, 1 - Math.exp(-3 * dt)).setY(0);
+    if (this.flightDir.lengthSq() < 1e-6) this.flightDir.copy(dir);
+    this.flightDir.normalize();
     if (this.flightTime < 0.35) {
       // Brief hold behind the golfer to watch the ball leave.
       this.targetLook.copy(ball);
@@ -92,24 +102,51 @@ export class CameraRig {
       this.apply(dt);
       return;
     }
-    const dist = Math.min(14, 6 + sp * 0.12);
-    this.targetPos.copy(ball).addScaledVector(dir, -dist).addScaledVector(UP, 2.2 + Math.min(6, sp * 0.06));
-    const g = this.course.height(this.targetPos.x, this.targetPos.z) + 1.2;
-    if (this.targetPos.y < g) this.targetPos.y = g;
+    const groundBall = this.course.height(ball.x, ball.z);
+    const ballUp = Math.max(0, ball.y - groundBall);
+    const t = flightCamTarget(ball, this.flightDir, sp, ballUp, (x, z) => this.camGround(x, z));
+    this.targetPos.copy(t);
     this.targetLook.copy(ball);
-    damp(this.pos, this.targetPos, 2.2, dt);
+    damp(this.pos, this.targetPos, 2.4, dt);
+    this.keepAboveGround(1.0);
     damp(this.look, this.targetLook, 12, dt);
     this.apply(dt);
   }
 
-  /** Ball at rest: hold a view of it. */
-  settle(ball: THREE.Vector3, dt: number) {
+  /** Initialise the travel direction used by the flight / settle cameras. */
+  setFlightDir(dir: THREE.Vector3) {
+    this.flightDir.set(dir.x, 0, dir.z);
+    if (this.flightDir.lengthSq() < 1e-6) this.flightDir.set(0, 0, -1);
+    this.flightDir.normalize();
+  }
+
+  /**
+   * Ball at rest: glide to a low view a few metres behind and beside the ball, looking along
+   * the line of travel (or toward `toward`, e.g. the pin, when given).
+   */
+  settle(ball: THREE.Vector3, dt: number, opts: { dir?: THREE.Vector3; close?: boolean } = {}) {
     this.mode = 'settle';
-    this.targetLook.copy(ball);
-    damp(this.look, this.targetLook, 4, dt);
-    const g = this.course.height(this.pos.x, this.pos.z) + 1.0;
-    if (this.pos.y < g) this.pos.y += (g - this.pos.y) * Math.min(1, dt * 5);
+    const dir = opts.dir ? new THREE.Vector3(opts.dir.x, 0, opts.dir.z) : this.flightDir.clone();
+    if (dir.lengthSq() < 1e-6) dir.set(0, 0, -1);
+    dir.normalize();
+    this.targetPos.copy(settleCamTarget(ball, dir, !!opts.close, (x, z) => this.camGround(x, z)));
+    this.targetLook.copy(ball).addScaledVector(UP, 0.15);
+    damp(this.pos, this.targetPos, 2.2, dt);
+    this.keepAboveGround(0.8);
+    damp(this.look, this.targetLook, 5, dt);
     this.apply(dt);
+  }
+
+  /** Terrain (or water surface) height under a camera position. */
+  private camGround(x: number, z: number) {
+    const g = this.course.height(x, z);
+    const w = this.course.waterHeight(x, z);
+    return w !== null && w > g ? w : g;
+  }
+
+  private keepAboveGround(clear: number) {
+    const g = this.camGround(this.pos.x, this.pos.z) + clear;
+    if (this.pos.y < g) this.pos.y = g;
   }
 
   /** Slow cinematic orbit (title screen / hole intro). */
@@ -164,4 +201,30 @@ export class CameraRig {
     }
     return null;
   }
+}
+
+type GroundFn = (x: number, z: number) => number;
+
+/**
+ * Where the flight camera wants to be: behind the ball along its travel, rising only partly
+ * with the ball (≈40% of its height above the ground) and never far above the terrain.
+ */
+export function flightCamTarget(ball: THREE.Vector3, dir: THREE.Vector3, horizSpeed: number, ballAboveGround: number, ground: GroundFn, out = new THREE.Vector3()) {
+  const back = Math.min(14, 6 + horizSpeed * 0.12);
+  out.copy(ball).addScaledVector(dir, -back);
+  const g = ground(out.x, out.z);
+  out.y = Math.max(g + 2.2 + Math.min(14, ballAboveGround * 0.4), g + 1.2);
+  return out;
+}
+
+/** The pleasant "ball at rest" view: ~6 m behind, slightly to the right, ~2.3 m above the ground. */
+export function settleCamTarget(ball: THREE.Vector3, dir: THREE.Vector3, close: boolean, ground: GroundFn, out = new THREE.Vector3()) {
+  const right = new THREE.Vector3().crossVectors(dir, UP).normalize();
+  const back = close ? 3.2 : 6.0;
+  const side = close ? 0.8 : 1.6;
+  const up = close ? 1.4 : 2.3;
+  out.copy(ball).addScaledVector(dir, -back).addScaledVector(right, side);
+  const g = ground(out.x, out.z);
+  out.y = Math.max(g + up, ball.y + up * 0.6);
+  return out;
 }

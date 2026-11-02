@@ -2,6 +2,7 @@ import { CourseField } from './course/CourseField';
 import { Course } from './course/Course';
 import { bakeCourse } from './course/bake';
 import type { UIHandlers } from './core/view';
+import { phase, gpuSync } from './render/perf/timing';
 
 declare global {
   interface Window {
@@ -13,6 +14,7 @@ declare global {
 }
 
 async function boot() {
+  phase('navigation → boot');
   const params = new URLSearchParams(location.search);
   const view = params.get('view');
   if (view) {
@@ -32,6 +34,7 @@ async function boot() {
     import('./ui/UI'),
     import('./game/Game'),
   ]);
+  phase('import modules');
   const world = new World(document.getElementById('app')!);
   const input = new Input(world.renderer.domElement);
   const audio = new AudioSystem();
@@ -46,9 +49,11 @@ async function boot() {
   };
   const ui = new UI(document.getElementById('ui-root')!, proxy, input, audio);
   ui.setLoading(0.02, 'Shaping the landscape…');
+  phase('world/input/audio/ui ctor');
   const field = new CourseField();
   const grids = await bakeCourse(field, (p) => ui.setLoading(0.05 + p * 0.6, 'Shaping the landscape…'));
   const course = new Course(field, grids);
+  phase('course bake');
   ui.setLoading(0.7, 'Growing grass and trees…');
   await new Promise((r) => setTimeout(r, 0));
   const mods = createModules();
@@ -56,12 +61,20 @@ async function boot() {
   await world.init(course, grids, list, post);
   mods.props.setTreeColliders(mods.foliage.colliders);
   (mods.foliage as { onCollidersChanged?: ((c: typeof mods.foliage.colliders) => void) | null }).onCollidersChanged = (c) => mods.props.setTreeColliders(c);
+  phase('world.init total');
   ui.setLoading(0.95, 'Raking the bunkers…');
   const game = new Game(world, mods, course, { input, audio, ui, handlers });
+  phase('game ctor');
   window.__stats = () => world.stats();
   // Warm-up frame so shaders compile behind the loading screen.
   game.toTitle();
+  phase('toTitle');
+  world.renderer.compile(world.scene, world.camera);
+  gpuSync(world.renderer.getContext());
+  phase('compile');
   game.update(1 / 60);
+  gpuSync(world.renderer.getContext());
+  phase('warm-up frame');
   ui.hideLoading();
   const autostart = params.get('play');
   if (autostart !== null) game.startRound(Number(autostart) || 0, 'round');
@@ -74,6 +87,7 @@ async function boot() {
   };
   window.__ready = true;
   loop();
+  phase('first frame (ready)');
 }
 
 boot().catch((e) => {
