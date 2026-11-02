@@ -59,6 +59,22 @@ export interface SwingGeometry {
 
 const BALL_R = 0.021335;
 
+/**
+ * Realistic clubhead-speed ceiling per club (mph). Very fast/violent mouse flicks used to reach
+ * ~185 mph with the driver (500-yard drives). Speeds stay 1:1 up to a knee, then saturate softly
+ * toward the cap, so over-swinging mostly adds error (face flail) instead of distance.
+ */
+export const SPEED_CAP_MPH: Record<string, number> = { driver: 118, wood: 114, hybrid: 110, iron: 102, wedge: 95, putter: 30 };
+const SPEED_KNEE = 0.82;
+
+export function capClubSpeed(club: Club, speed: number): number {
+  const cap = (SPEED_CAP_MPH[club.kind] ?? 110) * 0.44704;
+  const knee = cap * SPEED_KNEE;
+  if (speed <= knee) return speed;
+  const room = cap - knee;
+  return knee + room * Math.tanh((speed - knee) / room);
+}
+
 export class SwingModel {
   club: Club;
   geo: SwingGeometry;
@@ -335,7 +351,7 @@ export class SwingModel {
       this.impacted = true;
       const rough = this.jerkN > 0 ? this.jerkAcc / this.jerkN : 0;
       result = {
-        clubSpeed: speed2d * this.speedScale,
+        clubSpeed: capClubSpeed(this.club, speed2d * this.speedScale),
         attackAngle: Math.max(-12, Math.min(12, attack)),
         shaftLean: lean,
         soleHeight: soleY,

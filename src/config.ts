@@ -74,15 +74,15 @@ export interface SurfaceParams {
 }
 
 export const SURFACES: Record<SurfaceId, SurfaceParams> = {
-  tee: { restitution: 0.32, friction: 0.42, softness: 0.012, rollDecel: 1.7, rollDrag: 0.22, lieSpeed: 1.0, lieSpin: 1.0, lieTwist: 0, label: 'Tee' },
-  fairway: { restitution: 0.34, friction: 0.42, softness: 0.012, rollDecel: 1.7, rollDrag: 0.22, lieSpeed: 1.0, lieSpin: 1.0, lieTwist: 0.2, label: 'Fairway' },
+  tee: { restitution: 0.3, friction: 0.45, softness: 0.014, rollDecel: 2.1, rollDrag: 0.35, lieSpeed: 1.0, lieSpin: 1.0, lieTwist: 0, label: 'Tee' },
+  fairway: { restitution: 0.3, friction: 0.45, softness: 0.014, rollDecel: 2.1, rollDrag: 0.35, lieSpeed: 1.0, lieSpin: 1.0, lieTwist: 0.2, label: 'Fairway' },
   fringe: { restitution: 0.3, friction: 0.45, softness: 0.014, rollDecel: 0.95, rollDrag: 0.08, lieSpeed: 0.99, lieSpin: 0.95, lieTwist: 0.2, label: 'Fringe' },
   green: { restitution: 0.28, friction: 0.48, softness: 0.017, rollDecel: 0.55, rollDrag: 0.02, lieSpeed: 1.0, lieSpin: 1.0, lieTwist: 0, label: 'Green' },
   rough: { restitution: 0.22, friction: 0.55, softness: 0.02, rollDecel: 3.0, rollDrag: 0.9, lieSpeed: 0.9, lieSpin: 0.62, lieTwist: 1.4, label: 'Rough' },
   deepRough: { restitution: 0.16, friction: 0.65, softness: 0.026, rollDecel: 5.0, rollDrag: 2.2, lieSpeed: 0.72, lieSpin: 0.5, lieTwist: 3.0, label: 'Deep Rough' },
   sand: { restitution: 0.08, friction: 0.8, softness: 0.05, rollDecel: 7.0, rollDrag: 3.5, lieSpeed: 0.78, lieSpin: 0.7, lieTwist: 1.5, label: 'Bunker' },
   water: { restitution: 0, friction: 1, softness: 0, rollDecel: 99, rollDrag: 99, lieSpeed: 0, lieSpin: 0, lieTwist: 0, label: 'Water' },
-  path: { restitution: 0.62, friction: 0.35, softness: 0.002, rollDecel: 0.7, rollDrag: 0.01, lieSpeed: 0.97, lieSpin: 0.9, lieTwist: 0.8, label: 'Cart Path' },
+  path: { restitution: 0.55, friction: 0.4, softness: 0.002, rollDecel: 1.3, rollDrag: 0.01, lieSpeed: 0.97, lieSpin: 0.9, lieTwist: 0.8, label: 'Cart Path' },
   dirt: { restitution: 0.4, friction: 0.45, softness: 0.006, rollDecel: 1.5, rollDrag: 0.1, lieSpeed: 0.92, lieSpin: 0.85, lieTwist: 1.2, label: 'Dirt' },
   oob: { restitution: 0.2, friction: 0.6, softness: 0.02, rollDecel: 4, rollDrag: 1.5, lieSpeed: 0.85, lieSpin: 0.6, lieTwist: 2, label: 'Out of Bounds' },
 };

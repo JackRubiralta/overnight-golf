@@ -12,7 +12,7 @@ import type { Action } from '../core/actions';
 import type { ClubPanelView, SwingPanelView, Vec2 } from '../core/view';
 import { CLUBS, clubById, type Club } from '../physics/clubs';
 import type { ClubDelivery } from '../physics/impact';
-import { SwingModel, type SwingImpact } from './SwingModel';
+import { SwingModel, capClubSpeed, type SwingImpact } from './SwingModel';
 
 /** The 5-club bag (keys 1-5). Research: driver, hybrid, iron, wedge, putter. */
 export const BAG: Club[] = [clubById('D'), clubById('4H'), clubById('7I'), clubById('SW'), clubById('P')];
@@ -304,7 +304,7 @@ export class SwingController {
   panelView(): SwingPanelView {
     const m = this.model;
     const v = m.clubheadVel();
-    const speed = (Math.hypot(v.x, v.y) * m.speedScale) / 0.44704;
+    const speed = capClubSpeed(this.club, Math.hypot(v.x, v.y) * m.speedScale) / 0.44704;
     const ref = this.club.refSpeedMph;
     return {
       shoulder: m.geo.shoulder,
