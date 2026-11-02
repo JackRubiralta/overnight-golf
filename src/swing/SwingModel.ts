@@ -14,7 +14,7 @@
  * Coordinates: metres in the swing plane. x > 0 points toward the target, y up,
  * ground at y = 0. Angles are measured from straight down, positive toward the target.
  */
-import { DEG, SWING } from '../config';
+import { DEG, SURFACES, SWING } from '../config';
 import type { Club } from '../physics/clubs';
 
 export interface Vec2 {
@@ -73,6 +73,24 @@ export function capClubSpeed(club: Club, speed: number): number {
   if (speed <= knee) return speed;
   const room = cap - knee;
   return knee + room * Math.tanh((speed - knee) / room);
+}
+
+/**
+ * Putting is a pendulum stroke: the BACKSTROKE LENGTH sets the distance (≈ linear), and tempo
+ * (how fast the mouse moves) only nudges it ±10%. Raw mouse speed was far too sensitive
+ * ("2 inches or 2 miles").
+ */
+export const PUTT = {
+  /** Flat-green roll distance per degree of backstroke (m/deg). */
+  metresPerDeg: 0.62,
+  /** How much tempo can change the result (fraction of the deviation from the expected speed). */
+  tempoInfluence: 0.15,
+  tempoClamp: 0.4,
+};
+
+/** Clubhead speed (m/s) that rolls a putt `d` metres on a flat green. */
+export function puttClubSpeedFor(d: number, smash: number): number {
+  return Math.sqrt(2 * SURFACES.green.rollDecel * Math.max(0, d)) / smash;
 }
 
 export class SwingModel {
@@ -170,6 +188,19 @@ export class SwingModel {
     this.jerkN = 0;
     this.path = [];
     this.prevClub = this.clubhead();
+  }
+
+  /** Expected flat-green roll (m) for the current/peak backstroke of a putt. */
+  puttDistanceForBackswing(): number {
+    return PUTT.metresPerDeg * Math.max(0, -this.minTheta / DEG);
+  }
+
+  /** Putter impact speed: backstroke-length based, nudged a little by tempo. */
+  private puttSpeed(measured: number): number {
+    const target = puttClubSpeedFor(this.puttDistanceForBackswing(), this.club.smash);
+    if (target <= 0) return 0;
+    const ratio = Math.max(1 - PUTT.tempoClamp, Math.min(1 + PUTT.tempoClamp, measured / target));
+    return target * (1 + (ratio - 1) * PUTT.tempoInfluence);
   }
 
   /** Arm angle (rad from straight down, + toward target). */
@@ -351,7 +382,7 @@ export class SwingModel {
       this.impacted = true;
       const rough = this.jerkN > 0 ? this.jerkAcc / this.jerkN : 0;
       result = {
-        clubSpeed: capClubSpeed(this.club, speed2d * this.speedScale),
+        clubSpeed: this.club.kind === 'putter' ? this.puttSpeed(speed2d * this.speedScale) : capClubSpeed(this.club, speed2d * this.speedScale),
         attackAngle: Math.max(-12, Math.min(12, attack)),
         shaftLean: lean,
         soleHeight: soleY,

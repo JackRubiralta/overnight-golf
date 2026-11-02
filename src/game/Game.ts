@@ -434,6 +434,14 @@ export class Game {
       : this.swing.active
         ? 'A/D face · Q/E path — keep it square!'
         : 'Hold LMB + drag: swing · A/D face · Q/E path · Z/C aim · W/S stance · 1-5 club · Tab walk';
+    if (putting && !this.swing.practice) {
+      // Putting aid: the backstroke length sets the distance — show where this stroke would roll.
+      const est = this.swing.model.puttDistanceForBackswing();
+      const toPin = this.distToPin();
+      this.hint = this.swing.active
+        ? `Backstroke ≈ ${this.fmtShort(est)} on flat green · hole ${this.fmtShort(toPin)} — follow through smoothly`
+        : `Putt: drag the hands back — backstroke length sets the distance · hole ${this.fmtShort(toPin)}`;
+    }
     if (res) this.onImpact(res, aim);
   }
 
@@ -757,6 +765,11 @@ export class Game {
     }
     const from = this.mode === 'walk' ? this.player : this.ball;
     this.rangefinder = { distance: Math.hypot(p.x - from.x, p.z - from.z), elevation: p.y - this.course.height(from.x, from.z) };
+  }
+
+  /** Short distances (putting): feet or metres. */
+  private fmtShort(m: number) {
+    return settings.get('units') === 'yards' ? `${Math.round(m / 0.3048)} ft` : `${m.toFixed(1)} m`;
   }
 
   private fmtDist(m: number) {

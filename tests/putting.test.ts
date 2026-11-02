@@ -31,5 +31,17 @@ describe('putting', () => {
     console.log(rows.map(([b, td, r]) => `back ${b}° tDown ${td}: ${r ? r.dist.toFixed(1) + ' m (club ' + r.speed.toFixed(2) + ' m/s, launch ' + r.launchV.toFixed(1) + ')' : 'no impact'}`).join('\n'));
     const d = rows.map((r) => (r[2] ? r[2].dist : 0));
     expect(d[4]).toBeGreaterThan(d[1]);
+    // Roughly linear in backstroke length (~0.5 m per degree on a flat green).
+    expect(d[1]).toBeGreaterThan(12 * 0.5 * 0.7);
+    expect(d[1]).toBeLessThan(12 * 0.5 * 1.3);
+    expect(d[4]).toBeGreaterThan(35 * 0.5 * 0.7);
+    expect(d[4]).toBeLessThan(35 * 0.5 * 1.3);
+  });
+  it('tempo only nudges the distance (not 2 inches vs 2 miles)', () => {
+    const fast = putt(20, 0.25)!;
+    const slow = putt(20, 0.9)!;
+    console.log('tempo fast', fast.dist.toFixed(2), 'slow', slow.dist.toFixed(2));
+    expect(fast.dist / slow.dist).toBeLessThan(1.35);
+    expect(fast.dist / slow.dist).toBeGreaterThan(0.75);
   });
 });
