@@ -338,7 +338,8 @@ export class DynamicProps {
         for (let i = 0; i < pos.count; i += 2) {
           _v.fromBufferAttribute(pos, i);
           hull.push(_v.x, _v.y, _v.z);
-          hull.push(_v.x * 0.9, _v.y, _v.z * 0.9);
+          // Inner skin: pull toward the pot axis (positions are now relative to the centroid).
+          hull.push((_v.x + center.x) * 0.88 - center.x, _v.y, (_v.z + center.z) * 0.88 - center.z);
         }
         const b = new GeoBucket();
         b.add('terracottaDS', g, null, '#b8643a');
@@ -623,6 +624,26 @@ export class DynamicProps {
       s.body = fixed;
     }
     for (const p of this.props) this.createBody(p);
+    // Attaching colliders/joints and the first contact pass wake bodies; settle one step, then put
+    // every prop to sleep (resting) so idle sites cost nothing until something hits them.
+    world.step(this.events);
+    this.events.drainContactForceEvents(() => {});
+    for (const p of this.props) {
+      if (!p.body) continue;
+      p.body.sleep();
+      this.readPose(p);
+      this.syncVisual(p);
+    }
+    for (const v of this.visuals.values()) if (v.mesh) v.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Wake every body at a site (a support was removed or something was knocked). */
+  private wakeSite(site: number) {
+    for (const q of this.props) {
+      if (q.site !== site || !q.body || q.broken) continue;
+      q.body.wakeUp();
+      this.awake.add(q);
+    }
   }
 
   private groundPatch(cx: number, cz: number, radius: number) {
@@ -661,7 +682,7 @@ export class DynamicProps {
       .setRotation(p.quat)
       .setAngularDamping(p.angularDamping)
       .setLinearDamping(p.linearDamping)
-      .setCcdEnabled(!!p.ccd || p.kind === 'pot' || !!p.shard);
+      .setCcdEnabled(!!p.ccd || !!p.shard);
     if (!p.shard) desc.setSleeping(true);
     const body = world.createRigidBody(desc);
     const totalVol = p.colliders.reduce((a, c) => a + this.volume(c), 0) || 1;
@@ -817,6 +838,7 @@ export class DynamicProps {
       return info;
     }
     if (p.body) {
+      this.wakeSite(p.site);
       p.body.applyImpulseAtPoint({ x: _v.x, y: _v.y, z: _v.z }, { x: point.x, y: point.y, z: point.z }, true);
       this.awake.add(p);
     }
@@ -842,6 +864,7 @@ export class DynamicProps {
     }
     this.hideProp(p);
     this.awake.delete(p);
+    this.wakeSite(p.site);
     const burst = 1.2 + (impulse ? impulse.length() * 0.6 : 0.5);
     this.shardGeoms.forEach((sg, k) => {
       const lp = sg.center.clone().applyQuaternion(p.quat).add(p.pos);

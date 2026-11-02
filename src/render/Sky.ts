@@ -35,7 +35,7 @@ const CLOUD_STEP_SCALE = 2;
 const CLOUD_WIND_SCALE = 4;
 const MIN_CLOUD_DRIFT = 2; // m/s, so clouds always move a little
 /** Rain streak count per quality level. */
-const RAIN_COUNT: Record<QualityPreset['level'], number> = { low: 2500, medium: 4500, high: 7000, ultra: 9000 };
+const RAIN_COUNT: Record<QualityPreset['level'], number> = { low: 3000, medium: 5500, high: 9000, ultra: 12000 };
 /** Seconds to fade wetness / rain in and out. */
 const WEATHER_FADE = 4;
 
@@ -195,7 +195,7 @@ export class SkySystem implements RenderModule {
     this.envDirty = false;
     // make sure the cloud cube reflects the new lighting before capturing it
     this.cloudCube.update(this.ctx.renderer, this.ctx.camera.position);
-    // Capture from the camera's horizontal position so the clouds overhead match.
+    // Capture at the camera height (the dome shader's haze depends on it); clouds come from the cube.
     const cam = this.ctx.camera.position;
     this.envSky.position.set(0, 0, 0);
     const prev = this.envRT;

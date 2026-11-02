@@ -8,7 +8,7 @@ import { globalUniforms } from '../shared';
 const BOX = 36; // m, horizontal extent around the camera
 const HEIGHT = 22; // m
 const FALL_SPEED = 8.5; // m/s
-const STREAK = 0.55; // m
+const STREAK = 0.4; // m
 
 export class Rain {
   readonly mesh: THREE.LineSegments;
@@ -36,7 +36,7 @@ export class Rain {
         uWindDir: globalUniforms.uWindDir,
         uWindSpeed: globalUniforms.uWindSpeed,
         uColor: { value: new THREE.Color(0.62, 0.66, 0.72) },
-        uOpacity: { value: 0.35 },
+        uOpacity: { value: 0.22 },
       },
       vertexShader: /* glsl */ `
         attribute float aEnd;
@@ -54,7 +54,7 @@ export class Rain {
           // wrap into a box centred on the camera
           vec3 rel = mod(p - uCam + box * 0.5, box) - box * 0.5;
           vec3 wp = uCam + rel - normalize(vel) * ${STREAK.toFixed(2)} * aEnd * sp;
-          vFade = (1.0 - smoothstep(${(BOX * 0.25).toFixed(1)}, ${(BOX * 0.5).toFixed(1)}, length(rel.xz))) * smoothstep(0.6, 2.0, length(rel)) * (1.0 - 0.6 * aEnd);
+          vFade = (1.0 - smoothstep(${(BOX * 0.25).toFixed(1)}, ${(BOX * 0.5).toFixed(1)}, length(rel.xz))) * smoothstep(1.5, 4.5, length(rel)) * (1.0 - 0.6 * aEnd);
           gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
         }`,
       fragmentShader: /* glsl */ `
@@ -76,7 +76,7 @@ export class Rain {
   }
 
   setIntensity(amount: number) {
-    this.mat.uniforms.uOpacity.value = 0.35 * amount;
+    this.mat.uniforms.uOpacity.value = 0.22 * amount;
     this.mesh.visible = amount > 0.01;
   }
 

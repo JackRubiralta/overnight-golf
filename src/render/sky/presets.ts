@@ -64,9 +64,9 @@ export const TIME_PRESETS: Record<Settings['timeOfDay'], TimePreset> = {
     elevation: 62, azimuth: 170, turbidity: 2.6, rayleigh: 1.0, mieCoefficient: 0.003, mieDirectionalG: 0.78, skyIntensity: 1.0,
     sunColor: 0xfffaf2, sunIntensity: 3.4, sunDiscColor: 0xffffff, sunDiscIntensity: 80,
     hemiSky: 0xc8dcff, hemiGround: 0x5b6b3c, hemiIntensity: 0.4, envIntensity: 0.7,
-    fog: 0xc0d0e2, fogSun: 0xe9eef2, fogDensity: 0.0007, fogHeight: 180, skyHaze: 0.5,
+    fog: 0xc0d0e2, fogSun: 0xe9eef2, fogDensity: 0.0006, fogHeight: 180, skyHaze: 0.5,
     cloudLit: 0xffffff, cloudLitIntensity: 2.0, cloudShade: 0x9aa9c0, cloudShadeIntensity: 0.5, cloudCoverage: 0.4,
-    exposure: 0.92,
+    exposure: 0.82,
   },
   golden: {
     elevation: 12, azimuth: 242, turbidity: 4.0, rayleigh: 2.4, mieCoefficient: 0.004, mieDirectionalG: 0.82, skyIntensity: 1.0,
@@ -79,10 +79,10 @@ export const TIME_PRESETS: Record<Settings['timeOfDay'], TimePreset> = {
   dusk: {
     elevation: 1.8, azimuth: 262, turbidity: 7, rayleigh: 2.8, mieCoefficient: 0.007, mieDirectionalG: 0.9, skyIntensity: 1.1,
     sunColor: 0xff8a5a, sunIntensity: 1.5, sunDiscColor: 0xff9058, sunDiscIntensity: 25,
-    hemiSky: 0x7d88b8, hemiGround: 0x3b3526, hemiIntensity: 0.32, envIntensity: 0.6,
+    hemiSky: 0x7d88b8, hemiGround: 0x3b3526, hemiIntensity: 0.4, envIntensity: 0.6,
     fog: 0xa898a2, fogSun: 0xff9f78, fogDensity: 0.0014, fogHeight: 110, skyHaze: 0.6,
     cloudLit: 0xff8e66, cloudLitIntensity: 0.9, cloudShade: 0x5c5a78, cloudShadeIntensity: 0.18, cloudCoverage: 0.46,
-    exposure: 1.2,
+    exposure: 1.45,
   },
 };
 

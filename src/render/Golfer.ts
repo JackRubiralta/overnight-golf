@@ -104,12 +104,16 @@ export class Golfer implements RenderModule {
   update(ctx: FrameContext) {
     if (this.blendT < 1) this.commit(ctx.dt);
     this.trail.update(performance.now() / 1000);
-    if (DEBUG_CAM) (window as unknown as { __golfer?: Golfer }).__golfer = this;
-    if (DEBUG_CAM) this.debugCamera(ctx.camera, (window as unknown as { __golfercam?: string }).__golfercam ?? DEBUG_CAM);
+    if (DEBUG_CAM) {
+      // Visual-check hooks: window.__golfer (drive poses from the console), window.__golfercam.
+      const w = window as unknown as { __golfer?: Golfer; __golfercam?: string };
+      w.__golfer = this;
+      this.debugCamera(ctx.camera, w.__golfercam ?? DEBUG_CAM);
+    }
   }
 
   /**
-   * Debug close-up camera for visual checks: `?golfercam=behind|face|side|top` places the
+   * Debug close-up camera for visual checks: `?golfercam=behind|face|side|back|top|club|grip|walk` places the
    * camera relative to the golfer frame (only in the static viewer; ignored otherwise).
    */
   private debugCamera(cam: THREE.PerspectiveCamera, name: string) {
@@ -188,12 +192,14 @@ export class Golfer implements RenderModule {
     }
   }
 
-  /** Walking/idle pose at a world position facing yaw (radians about +Y, 0 = facing -Z). speed m/s. */
+  /** Walking/idle pose at a world position (feet snapped to the terrain) facing yaw (radians about +Y, 0 = facing -Z). speed m/s. */
   setWalkPose(pos: THREE.Vector3, yaw: number, speed: number) {
     if (!this.clubs) return;
     const dt = this.stepClock();
     const prevOrigin = this.tmpS.setFromMatrixPosition(this.frame).clone();
-    this.frame.makeRotationY(yaw + Math.PI).setPosition(pos);
+    // Stand on the terrain (pos.y is only used when no course is available).
+    const gy = this.course ? this.course.height(pos.x, pos.z) : pos.y;
+    this.frame.makeRotationY(yaw + Math.PI).setPosition(pos.x, Number.isFinite(gy) ? gy : pos.y, pos.z);
     this.switchMode('walk', prevOrigin);
     this.terrainLift();
     this.rig.solveWalk(this.clubs[this.clubKind], speed, dt);

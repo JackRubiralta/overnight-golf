@@ -25,7 +25,7 @@ const PLAYLINE_BUSH = 30;
 const PLAYLINE_ROCK = 32;
 const PLAYLINE_FLOWER = 22;
 /** Trees closer than this corridor distance are "in play" (always present, colliders). */
-const IN_PLAY = 60;
+const IN_PLAY = 50;
 
 export interface Placed {
   x: number;
@@ -175,8 +175,10 @@ export function placeFoliage(course: Course, seed = 2024): PlacementResult {
       const r = rng.next();
       const dens = g.density(x, z);
       const corr = g.corridor(x, z);
+      // A broken row of trees lining the outer rough of every hole.
+      const row = corr > 27 && corr < 60 ? (1 - Math.abs(corr - 38) / 22) * 0.45 * vnoise(x / 45, z / 45, 3) : 0;
       let specimen = false;
-      if (roll > dens * 0.9) {
+      if (roll > Math.min(1, dens * 0.9 + row)) {
         // Specimen: sparse in the outer rough, away from the woods.
         const sp = corr > 16 && corr < 40 && roll > 0.996 - 0.004 * vnoise(x / 80, z / 80, 5);
         if (!sp) continue;
@@ -188,7 +190,11 @@ export function placeFoliage(course: Course, seed = 2024): PlacementResult {
       const variant = specimen ? [S.oakA, S.oakB, S.lime][Math.floor(r * 3)] : pickTreeSpecies(x, z, rng);
       const scale = specimen ? rng.range(1.0, 1.3) : rng.range(0.78, 1.18);
       const inPlay = corr < IN_PLAY;
-      trees.push({ x, z, y: groundY(x, z, 0.5 * scale) - 0.12, yaw: rng.next() * Math.PI * 2, scale, variant, r, rank: inPlay ? r * 0.01 : 0.01 + r * (1 + (corr - IN_PLAY) / 60) * (Math.max(Math.abs(x), Math.abs(z)) > 600 ? 0.6 : 1) });
+      // Beyond the holes, budgets keep whole stands (clumpiest ground first) instead of thinning
+      // everything evenly: woods + open meadows rather than a savanna. Rim woods get a boost.
+      const stand = vnoise(x / 110, z / 110, 41) * 0.7 + vnoise(x / 37, z / 37, 42) * 0.3;
+      const rimBoost = Math.max(Math.abs(x), Math.abs(z)) > 600 ? 0.25 : 0;
+      trees.push({ x, z, y: groundY(x, z, 0.5 * scale) - 0.12, yaw: rng.next() * Math.PI * 2, scale, variant, r, rank: inPlay ? r * 0.01 : 0.01 + (1 - stand) - rimBoost + r * 0.12 + (corr - IN_PLAY) / 250 });
     }
   }
 
@@ -209,7 +215,8 @@ export function placeFoliage(course: Course, seed = 2024): PlacementResult {
       if (!landmarkClear(x, z, -10)) continue;
       if (playLineDist(x, z, corr) < PLAYLINE_BUSH) continue;
       const scale = rng.range(0.7, 1.35);
-      bushes.push({ x, z, y: groundY(x, z, 0.3) - 0.08, yaw: rng.next() * Math.PI * 2, scale, variant: r < 0.55 ? S.bushA : S.bushB, r, rank: corr < IN_PLAY ? r * 0.01 : 0.01 + r });
+      const stand = vnoise(x / 110, z / 110, 41) * 0.7 + vnoise(x / 37, z / 37, 42) * 0.3;
+      bushes.push({ x, z, y: groundY(x, z, 0.3) - 0.08, yaw: rng.next() * Math.PI * 2, scale, variant: r < 0.55 ? S.bushA : S.bushB, r, rank: corr < IN_PLAY ? r * 0.01 : 0.01 + (1 - stand) + r * 0.12 });
     }
   }
 
