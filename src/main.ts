@@ -8,6 +8,7 @@ declare global {
     __ready?: boolean;
     __stats?: () => unknown;
     __game?: unknown;
+    __shot?: string;
   }
 }
 

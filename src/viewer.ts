@@ -62,14 +62,23 @@ export async function runViewer(course: Course, grids: CourseGrids, view: string
     },
   });
 
+  // `&frames=N`: render N frames with a fixed timestep, then stop and capture the canvas in the
+  // same task (reliable headless screenshots even when the CPU is heavily loaded).
+  const stopAt = Number(params.get('frames') ?? 0);
   let frames = 0;
   let last = performance.now();
   const loop = () => {
     const now = performance.now();
-    const dt = Math.min(0.05, (now - last) / 1000);
+    const dt = stopAt ? 1 / 30 : Math.min(0.05, (now - last) / 1000);
     last = now;
     world.frame(dt);
-    if (++frames === 4) window.__ready = true;
+    frames++;
+    if (stopAt && frames >= stopAt) {
+      window.__shot = world.renderer.domElement.toDataURL('image/png');
+      window.__ready = true;
+      return;
+    }
+    if (frames === 4 && !stopAt) window.__ready = true;
     requestAnimationFrame(loop);
   };
   loop();

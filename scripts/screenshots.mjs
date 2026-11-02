@@ -16,12 +16,14 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 page.on('pageerror', (e) => errors.push(String(e)));
 for (const v of views) {
   const t0 = Date.now();
-  await page.goto(`http://localhost:${port}/?view=${v}${extra}`);
+  await page.goto(`http://localhost:${port}/?view=${v}&frames=${process.env.SHOT_FRAMES || 12}${extra}`);
   try {
-    await page.waitForFunction(() => window.__ready === true, null, { timeout: 180000 });
+    await page.waitForFunction(() => window.__ready === true, null, { timeout: 900000 });
   } catch { errors.push(`timeout waiting for view ${v}`); }
-  await page.waitForTimeout(Number(process.env.SHOT_WAIT || 1500));
-  await page.screenshot({ path: `${out}/${v}.png`, timeout: 180000 });
+  // The viewer captured its own canvas after N frames (window.__shot); fall back to a page screenshot.
+  const shot = await page.evaluate(() => window.__shot || null);
+  if (shot) fs.writeFileSync(`${out}/${v}.png`, Buffer.from(shot.split(',')[1], 'base64'));
+  else await page.screenshot({ path: `${out}/${v}.png`, timeout: 180000 });
   const stats = await page.evaluate(() => (window.__stats ? window.__stats() : null));
   console.log(v, `${Date.now() - t0}ms`, JSON.stringify(stats));
 }
