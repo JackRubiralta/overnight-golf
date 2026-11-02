@@ -15,6 +15,8 @@ export interface DebugShotOpts {
   clubSpeed?: number;
   /** Target distance (m) to solve the club speed for (total distance along the aim line). */
   distance?: number;
+  /** What `distance` measures: total (default) or carry. */
+  solveFor?: 'total' | 'carry';
   /** Aim offset (deg, + right of the pin line). */
   aim?: number;
   /** Solve the aim so the ball finishes on the pin line (accounts for curve, slopes, wind). */

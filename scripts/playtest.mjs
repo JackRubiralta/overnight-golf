@@ -82,9 +82,10 @@ const drainTransitions = () => page.evaluate(() => window.__trans.splice(0).join
 const plan = (s, suggested) => {
   const d = s.dist;
   if (s.lie === 'green' || (s.lie === 'fringe' && d < 15)) return { club: 4, distance: d + 0.35, autoAim: true };
-  if (d < 90) return { club: 3, distance: d, autoAim: true };
-  if (d < 145) return { club: 2, distance: d, autoAim: true };
-  if (d < 185) return { club: 1, distance: d, autoAim: true };
+  // Approach shots: fly it most of the way (a real player's full swing), let it release to the pin.
+  if (d < 90) return { club: 3, distance: Math.max(1, d - 3), solveFor: 'carry', autoAim: true };
+  if (d < 145) return { club: 2, distance: d - 6, solveFor: 'carry', autoAim: true };
+  if (d < 185) return { club: 1, distance: d - 10, solveFor: 'carry', autoAim: true };
   return { club: s.lie === 'tee' ? 0 : 1, distance: Math.min(d, s.lie === 'tee' ? 245 : 190), autoAim: true, suggested };
 };
 
