@@ -4,13 +4,13 @@
  * Each point is stored twice (left/right edge); the vertex shader expands the ribbon
  * perpendicular to both the path tangent and the view ray, with a width that is constant in
  * pixels (min physical width near the camera), so the tracer reads the same at 3 m and 300 m.
- * The fragment shader draws a hot white core inside a coloured glow (additive, HDR → bloom),
+ * The fragment shader draws a hot white core inside a coloured glow (premultiplied: mostly additive + partial cover, HDR → bloom),
  * a bright comet head at the ball and a soft fade-in at launch.
  *
  * Buffers are preallocated (MAX_POINTS); pushes only upload the last two points.
  */
 import * as THREE from 'three';
-import { FX_GLSL, fxUniforms } from './common';
+import { FX_GLSL, fxUniforms, premultipliedBlending } from './common';
 
 // ---- tuning -------------------------------------------------------------------------------
 export const TRACER_MAX_POINTS = 1024;
@@ -24,6 +24,8 @@ export const TRACER_HOLD = 2.0;
 export const TRACER_FADE = 10.0;
 /** Brightness multiplier (HDR, for bloom). */
 const INTENSITY = 1.0;
+/** How much the ribbon occludes the background (0 = purely additive). */
+const COVER = 0.55;
 
 const VERT = /* glsl */ `
 ${FX_GLSL}
@@ -68,9 +70,13 @@ void main() {
   vec3 hot = mix(uColor, vec3(1.0), 0.15);
   vec3 col = (uColor * glow * 2.6 + hot * core * 0.9) * shimmer + vec3(1.0, 0.97, 0.92) * core * 2.4 * head;
   float a = uAlpha * launch * (1.0 - 0.85 * fxFog(vDist));
-  gl_FragColor = vec4(col * ${INTENSITY.toFixed(2)}, clamp(a, 0.0, 1.0)); // additive: src * alpha
+  // Premultiplied: mostly additive glow, but the ribbon also partially covers what is behind it
+  // (COVER) so the shot colour still reads against a bright golden-hour sky.
+  a = clamp(a, 0.0, 1.0);
+  gl_FragColor = vec4(col * ${INTENSITY.toFixed(2)}, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
+  gl_FragColor = vec4(gl_FragColor.rgb * a, a * clamp(glow + core, 0.0, 1.0) * ${COVER.toFixed(2)});
 }
 `;
 
@@ -126,9 +132,9 @@ export class TracerRibbon {
       transparent: true,
       depthWrite: false,
       depthTest: true,
-      blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
     });
+    premultipliedBlending(mat);
     this.mesh = new THREE.Mesh(this.geo, mat);
     this.mesh.name = 'tracer';
     this.mesh.frustumCulled = false;

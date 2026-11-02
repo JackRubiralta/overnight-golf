@@ -59,19 +59,34 @@ export function bakeImpostors(renderer: THREE.WebGLRenderer, inputs: BakeInput[]
 
   const prevTarget = renderer.getRenderTarget();
   const prevAutoClear = renderer.autoClear;
-  const prevClear = renderer.getClearColor(new THREE.Color());
-  const prevAlpha = renderer.getClearAlpha();
   const prevShadow = renderer.shadowMap.autoUpdate;
   renderer.shadowMap.autoUpdate = false;
   renderer.autoClear = false;
 
-  // Clear: albedo background = a mid foliage colour (mip bleed), normal background = up.
-  renderer.setRenderTarget(albedoRT);
-  renderer.setClearColor(new THREE.Color(0.28, 0.33, 0.2), 0);
-  renderer.clear(true, true, false);
-  renderer.setRenderTarget(normalRT);
-  renderer.setClearColor(new THREE.Color(0.5, 1.0, 0.5), 0);
-  renderer.clear(true, true, false);
+  // Background = a mid foliage colour with alpha 0 (so mips bleed foliage, not black, into the
+  // silhouette); normal background = up. renderer.clear() would premultiply the colour by
+  // alpha = 0, so fill with a full-screen pass instead.
+  const fillMat = new THREE.ShaderMaterial({
+    uniforms: { uFill: { value: new THREE.Vector3() } },
+    vertexShader: 'void main() { gl_Position = vec4(position.xy * 2.0, 0.0, 1.0); }',
+    fragmentShader: 'uniform vec3 uFill; void main() { gl_FragColor = vec4(uFill, 0.0); }',
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.NoBlending,
+    toneMapped: false,
+  });
+  const fill = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), fillMat);
+  fill.frustumCulled = false;
+  const fillScene = new THREE.Scene();
+  fillScene.add(fill);
+  for (const [rt, c] of [[albedoRT, [0.3, 0.36, 0.22]], [normalRT, [0.5, 1.0, 0.5]]] as const) {
+    fillMat.uniforms.uFill.value.set(c[0], c[1], c[2]);
+    renderer.setRenderTarget(rt);
+    renderer.clear(false, true, false);
+    renderer.render(fillScene, cam);
+  }
+  fill.geometry.dispose();
+  fillMat.dispose();
   // Storage (with mip levels) now exists: skip per-render mip generation while baking.
   albedoRT.texture.generateMipmaps = false;
   normalRT.texture.generateMipmaps = false;
@@ -123,7 +138,6 @@ export function bakeImpostors(renderer: THREE.WebGLRenderer, inputs: BakeInput[]
 
   renderer.setRenderTarget(prevTarget);
   renderer.autoClear = prevAutoClear;
-  renderer.setClearColor(prevClear, prevAlpha);
   renderer.shadowMap.autoUpdate = prevShadow;
   for (const m of disposables) m.dispose();
 

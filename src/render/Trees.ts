@@ -56,10 +56,10 @@ interface LodDistances {
   lod1Shadows: boolean;
 }
 const LODS: Record<QualityPreset['level'], LodDistances> = {
-  low: { l0: 28, l1: 110, b0: 14, b1: 60, bushFar: 200, rock0: 25, rockFar: 260, flowerFar: 45, impTile: 128, lod1Shadows: false },
-  medium: { l0: 42, l1: 160, b0: 20, b1: 80, bushFar: 260, rock0: 35, rockFar: 340, flowerFar: 65, impTile: 192, lod1Shadows: true },
-  high: { l0: 58, l1: 220, b0: 26, b1: 100, bushFar: 320, rock0: 45, rockFar: 420, flowerFar: 85, impTile: 256, lod1Shadows: true },
-  ultra: { l0: 80, l1: 300, b0: 34, b1: 130, bushFar: 400, rock0: 60, rockFar: 520, flowerFar: 110, impTile: 256, lod1Shadows: true },
+  low: { l0: 28, l1: 110, b0: 14, b1: 90, bushFar: 200, rock0: 25, rockFar: 260, flowerFar: 45, impTile: 128, lod1Shadows: false },
+  medium: { l0: 42, l1: 160, b0: 20, b1: 130, bushFar: 260, rock0: 35, rockFar: 340, flowerFar: 65, impTile: 192, lod1Shadows: true },
+  high: { l0: 58, l1: 220, b0: 26, b1: 170, bushFar: 320, rock0: 45, rockFar: 420, flowerFar: 85, impTile: 256, lod1Shadows: true },
+  ultra: { l0: 80, l1: 300, b0: 34, b1: 220, bushFar: 400, rock0: 60, rockFar: 520, flowerFar: 110, impTile: 256, lod1Shadows: true },
 };
 /** Fade band half-widths as a fraction of the switch distance. */
 const BAND = 0.08;

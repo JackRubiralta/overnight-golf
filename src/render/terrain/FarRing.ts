@@ -73,6 +73,39 @@ function gridHeight(g: CourseGrids, x: number, z: number): number {
   return (H(i, j) * (1 - tx) + H(i + 1, j) * tx) * (1 - tz) + (H(i, j + 1) * (1 - tx) + H(i + 1, j + 1) * tx) * tz;
 }
 
+/** Depth (m) of the curtain hanging from the ring's inner edge (hides seam cracks). */
+const SEAM_SKIRT = 40;
+
+/**
+ * Hang a vertical curtain from ring 0: where a geomorphing terrain edge dips below the ring's
+ * straight 20 m segments, the gap would otherwise show the sky. The curtain has its own
+ * vertices (with ring 0's normals copied) so it does not disturb the ring's smooth shading.
+ */
+function addSeamSkirt(geo: THREE.BufferGeometry, M: number) {
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+  const nrm = geo.getAttribute('normal') as THREE.BufferAttribute;
+  const p = Array.from(pos.array as Float32Array);
+  const nn = Array.from(nrm.array as Float32Array);
+  const idx = Array.from(geo.getIndex()!.array as ArrayLike<number>);
+  const top = pos.count;
+  for (const drop of [0, SEAM_SKIRT]) {
+    for (let k = 0; k < M; k++) {
+      p.push(pos.getX(k), pos.getY(k) - drop, pos.getZ(k));
+      nn.push(nrm.getX(k), nrm.getY(k), nrm.getZ(k));
+    }
+  }
+  for (let k = 0; k < M; k++) {
+    const a = top + k;
+    const b = top + ((k + 1) % M);
+    const c = top + M + k;
+    const e = top + M + ((k + 1) % M);
+    idx.push(a, c, b, b, c, e, a, b, c, b, e, c); // both windings
+  }
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nn, 3));
+  geo.setIndex(idx);
+}
+
 /** Point on the perimeter of a square of half-size s, parameter t in [0, 1) (CCW from -x,-z). */
 function squarePoint(s: number, t: number): [number, number] {
   const u = t * 4;
@@ -144,6 +177,7 @@ export function buildFarRingGeometry(g: CourseGrids): THREE.BufferGeometry {
     geo.setIndex(idx);
     geo.computeVertexNormals();
   }
+  addSeamSkirt(geo, M);
   geo.computeBoundingSphere();
   return geo;
 }
