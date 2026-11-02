@@ -25,6 +25,7 @@ import { Minimap } from './Minimap';
 import { ShotCard } from './ShotCard';
 import { buildScorecard } from './Scorecard';
 import { buildControls, buildSettings } from './menus';
+import { PadNav } from './padNav';
 
 // ── tuning ──────────────────────────────────────────────────────────────
 const ESC_GRACE_MS = 250;
@@ -142,6 +143,13 @@ export class UI {
     this.root.append(this.hud, this.overlay, this.toastBox, this.screens, this.modalLayer);
     this.setHudVisible(false);
     window.addEventListener('keydown', (e) => this.onKey(e));
+    // Gamepad menu navigation over whichever layer is on top.
+    new PadNav(
+      () => this.navLayer(),
+      () => this.navLayer() !== null && !this.controlsUI?.state.capturing,
+      () => this.padBack(),
+      () => this.audio.ui('tick'),
+    );
     settings.subscribe((_s, ch) => {
       if (ch.includes('units') && this.titleEl) this.refreshTitleBest();
     });
@@ -306,6 +314,19 @@ export class UI {
       e.preventDefault();
       this.stack[this.stack.length - 1].back();
     }
+  }
+
+  /** Top-most interactive layer for gamepad navigation. */
+  private navLayer(): HTMLElement | null {
+    if (this.stack.length) return this.stack[this.stack.length - 1].el;
+    if (this.scorecardEl) return this.scorecardEl;
+    return this.titleEl;
+  }
+
+  private padBack() {
+    const t = this.top();
+    if (t === 'pause') this.handlers.onResume();
+    else if (t) this.stack[this.stack.length - 1].back();
   }
 
   private openSettings() {

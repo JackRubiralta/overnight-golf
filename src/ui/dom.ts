@@ -43,3 +43,13 @@ export function fitCanvas(c: HTMLCanvasElement): { ctx: CanvasRenderingContext2D
   ctx.clearRect(0, 0, w, hh);
   return { ctx, w, h: hh };
 }
+
+const FONT_STACK = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+/** Canvas font string; px is multiplied by the panel scale `k`. */
+export function cfont(weight: number, px: number, k = 1) {
+  return `${weight} ${(px * k).toFixed(1)}px ${FONT_STACK}`;
+}
+/** Scale for canvas text/markers so they grow with the (em-sized) panel. Base = 220 CSS px wide. */
+export function panelScale(w: number) {
+  return Math.max(1, Math.min(1.9, w / 220));
+}

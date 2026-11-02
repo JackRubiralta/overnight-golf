@@ -4,7 +4,7 @@
  * the markers (player, ball, pin) are redrawn each frame.
  */
 import { HOLES, type Ellipse, type HoleDef, type P2 } from '../course/layout';
-import { h } from './dom';
+import { cfont, h, panelScale } from './dom';
 import { distStr, type Units } from './format';
 
 // ── tuning ──────────────────────────────────────────────────────────────
@@ -197,7 +197,7 @@ export class Minimap {
     ctx.lineTo(px, py);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.font = '700 9px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+    ctx.font = cfont(700, 9, panelScale(w * 1.6));
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
     ctx.shadowColor = 'rgba(0,0,0,0.8)';

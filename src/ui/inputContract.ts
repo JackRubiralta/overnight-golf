@@ -17,12 +17,14 @@ export interface RebindableInput {
    * code / button index, or null when cancelled (Escape / timeout). While capturing, the input
    * system must not fire game actions for that press.
    */
-  captureNext(device: BindDevice, cb: (code: string | number | null) => void): void;
+  captureNext(device: BindDevice, cb: (code: string | number | null) => void): void | (() => void);
   setKeyBinding(action: Action, index: number, code: string | null): void;
   setPadBinding(action: Action, index: number, button: number | null): void;
   resetBindings(): void;
-  /** Optional: cancel an in-progress capture. */
+  /** Optional: cancel an in-progress capture (captureNext may instead return a cancel function). */
   cancelCapture?(): void;
+  /** Optional: other actions in the same context already using this code. */
+  findConflicts?(action: Action, code: string | number): Action[];
   /** Last device used, for button prompts. */
   lastDevice?: 'kbm' | 'pad';
 }
@@ -31,6 +33,7 @@ type Maybe = Partial<RebindableInput> & Record<string, unknown>;
 
 /** Defensive adapter around whatever Input object we were given. */
 export class InputBridge {
+  private cancelFn: (() => void) | null = null;
   constructor(private readonly input: unknown) {}
   private get i(): Maybe {
     return (this.input ?? {}) as Maybe;
@@ -62,7 +65,11 @@ export class InputBridge {
   capture(device: BindDevice, cb: (code: string | number | null) => void) {
     if (typeof this.i.captureNext === 'function') {
       try {
-        this.i.captureNext(device, cb);
+        const r = this.i.captureNext(device, (code) => {
+          this.cancelFn = null;
+          cb(code);
+        });
+        this.cancelFn = typeof r === 'function' ? r : null;
         return;
       } catch {
         /* use the fallback below */
@@ -72,11 +79,21 @@ export class InputBridge {
   }
   cancelCapture() {
     try {
-      this.i.cancelCapture?.();
+      const f = this.cancelFn;
+      this.cancelFn = null;
+      if (f) f();
+      else this.i.cancelCapture?.();
     } catch {
       /* ignore */
     }
     cancelFallback?.();
+  }
+  conflicts(action: Action, code: string | number): Action[] {
+    try {
+      return this.i.findConflicts?.(action, code) ?? [];
+    } catch {
+      return [];
+    }
   }
   setKey(action: Action, index: number, code: string | null): boolean {
     if (typeof this.i.setKeyBinding !== 'function') return false;

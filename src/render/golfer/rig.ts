@@ -194,7 +194,7 @@ export class GolferRig {
     const kind = club.kind;
     const tau0 = clamp(0.5 + (1.04 - L3) * 0.62, 0.48, 0.72); // spine tilt from vertical
     const sigma0 = 0.12; // side bend (trail shoulder low)
-    const pelvisH = 0.872 - (1.04 - L3) * 0.08;
+    const pelvisH = 0.9 - (1.04 - L3) * 0.07;
     const ha = map(sw.shoulder.x, sw.shoulder.y - sw.armLen, this.t[7]);
     const xc = map(sw.shoulder.x, 0, this.t[8]).x - (BALL_FWD[kind] ?? 0) + inp.stance * 0.03;
     const uA = this.t[9].set(0, Math.sin(alpha), -Math.cos(alpha));
@@ -220,7 +220,7 @@ export class GolferRig {
       return wA.z - Math.sqrt(Math.max(0.0025, reach * reach - dx * dx - dy * dy)) - rel.z;
     };
     for (let it = 0; it < 4; it++) pelvisZ0 = Math.max(need(gLa, relL, bLa, full * LEAD_REACH), need(gRa, relR, bRa, full * TRAIL_REACH));
-    const footZ = pelvisZ0 + 0.035;
+    const footZ = pelvisZ0 + 0.075;
 
     // --- club & hands -----------------------------------------------------------------
     const H = map(sw.hands.x, sw.hands.y, this.t[0]);
@@ -338,8 +338,8 @@ export class GolferRig {
 
     // --- arms -----------------------------------------------------------------------------
     const down = v3().set(0, -1, 0);
-    const poleL = v3().copy(cy).multiplyScalar(-0.8).addScaledVector(cz, -0.7).addScaledVector(cx, 0.35).addScaledVector(down, 0.6 * thru);
-    const poleR = v3().copy(cy).multiplyScalar(-0.7).addScaledVector(cz, -0.6).addScaledVector(cx, -0.45).addScaledVector(down, 2.2 * back).addScaledVector(down, 0.4 * thru);
+    const poleL = v3().copy(cy).multiplyScalar(-1).addScaledVector(cz, -0.35).addScaledVector(cx, 0.2).addScaledVector(down, 0.6 * thru);
+    const poleR = v3().copy(cy).multiplyScalar(-1).addScaledVector(cz, -0.3).addScaledVector(cx, -0.15).addScaledVector(down, 2.2 * back).addScaledVector(down, 0.4 * thru);
     this.solveArm(shL, wL, gL, poleL, backL, Bone.UpperL, Bone.ForeL, Bone.HandL);
     this.solveArm(shR, wR, gR, poleR, backR, Bone.UpperR, Bone.ForeR, Bone.HandR);
 

@@ -154,7 +154,8 @@ void grassVertex(out vec3 outPos, out vec3 outN) {
   vec2 viewXZ = normalize(xz - cameraPosition.xz + 1e-4);
 
   // Heights (m) per surface, with per-blade and patch variation.
-  float hRough = mix(0.09, 0.2, nBig) * mix(0.55, 1.25, r2);
+  // Rough grows in loose tussocks (~1 m): taller, denser clumps with lower, thinner gaps between.
+  float hRough = mix(0.09, 0.2, nBig) * mix(0.55, 1.25, r2) * mix(0.55, 1.2, clump);
   float hDeep = mix(0.22, 0.48, nBig) * mix(1.0, 1.25, fescue) * mix(0.35, 1.3, clump * clump) * mix(0.6, 1.2, r2);
   float h = mix(hRough, hDeep, wDeep);
   h = mix(h, 0.055 * mix(0.7, 1.2, r2), wCut);
@@ -312,7 +313,7 @@ void RE_Direct_Grass( const in IncidentLight directLight, const in vec3 geometry
   // Light leaving a leaf is filtered by chlorophyll: more saturated than its reflected colour.
   vec3 albedo = material.diffuseColor;
   vec3 trans = albedo * albedo / max( dot( albedo, vec3( 0.3333 ) ), 1e-3 );
-  reflectedLight.directDiffuse += directLight.color * trans * uTransTint * vGrassTrans * uTransStrength * ( 0.5 * back + 1.1 * fwd );
+  reflectedLight.directDiffuse += directLight.color * trans * uTransTint * vGrassTrans * uTransStrength * ( 0.5 * back + 0.85 * fwd );
 }
 #undef RE_Direct
 #define RE_Direct RE_Direct_Grass

@@ -248,9 +248,11 @@ export function buildControls(input: InputBridge, audio: AudioSystem, toast: (m:
       if (code === null || code === undefined) {
         audio.ui('close');
       } else {
+        const clash = input.conflicts(action, code);
         const ok = device === 'kbm' ? input.setKey(action, index, String(code)) : input.setPad(action, index, Number(code));
         audio.ui(ok ? 'success' : 'error');
         if (!ok) toast('Could not change that binding', 'bad');
+        else if (clash.length) toast(`Also used by: ${clash.map((a) => ACTION_LABELS[a]).join(', ')}`, 'info');
       }
       render();
     });

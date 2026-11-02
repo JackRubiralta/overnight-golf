@@ -7,7 +7,7 @@
  * clubhead speed trail (coloured by speed band), mannequin + club, ball, virtual cursor, readouts.
  */
 import type { SwingPanelView, Vec2 } from '../core/view';
-import { fitCanvas } from './dom';
+import { cfont, fitCanvas, panelScale } from './dom';
 import { speedFromMph, speedUnit, type Units } from './format';
 
 // ── tuning ──────────────────────────────────────────────────────────────
@@ -94,6 +94,7 @@ export class SwingPanel {
     const f = fitCanvas(this.canvas);
     if (!f) return;
     const { ctx, w, h } = f;
+    const u = panelScale(w); // text / marker scale
     const S = v.shoulder;
     // Fit a typical full-swing envelope (hands circle + the club at the top / finish), fixed per
     // club so positions stay spatially stable for muscle memory. Extreme club positions may clip.
@@ -124,11 +125,11 @@ export class SwingPanel {
     ctx.stroke();
 
     // Target direction label.
-    ctx.font = '600 9px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+    ctx.font = cfont(600, 9, u);
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText('◀ TARGET', 9, 14);
+    ctx.fillText('◀ TARGET', 9, 14 * u);
 
     // Sweet ring (cursor radius band for clean contact).
     const [sx, sy] = P(S);
@@ -165,14 +166,14 @@ export class SwingPanel {
     ctx.stroke();
     ctx.setLineDash([]);
     // Thin / fat hints at the top of the band (where the hands rarely are).
-    ctx.font = '600 8px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+    ctx.font = cfont(600, 8, u);
     ctx.textAlign = 'center';
     const lab = (txt: string, rr: number, a: number) => {
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.fillText(txt, sx + Math.sin(a) * rr, sy + Math.cos(a) * rr);
     };
-    lab('THIN', r0 - 8, Math.PI);
-    lab('FAT', r1 + 8, Math.PI);
+    lab('THIN', r0 - 8 * u, Math.PI);
+    lab('FAT', r1 + 8 * u, Math.PI);
 
     // Ghost (previous) and current hand paths.
     const poly = (pts: Vec2[], style: string, width: number, dash: number[] = []) => {
@@ -188,8 +189,8 @@ export class SwingPanel {
       ctx.stroke();
       ctx.setLineDash([]);
     };
-    poly(v.ghostPath, GHOST, 2, [5, 4]);
-    poly(v.path, PATH, 2);
+    poly(v.ghostPath, GHOST, 2 * u, [5 * u, 4 * u]);
+    poly(v.path, PATH, 2 * u);
 
     // Clubhead speed trail.
     ctx.lineCap = 'round';
@@ -199,7 +200,7 @@ export class SwingPanel {
       const age = (this.time - b.t) / TRAIL_SECONDS;
       ctx.globalAlpha = Math.max(0, 1 - age) * 0.9;
       ctx.strokeStyle = BAND_COL[speedBandIndex(b.mph, v.speedBands)];
-      ctx.lineWidth = 1 + 5 * Math.max(0, 1 - age);
+      ctx.lineWidth = (1 + 5 * Math.max(0, 1 - age)) * u;
       ctx.beginPath();
       ctx.moveTo(X(a.x), Y(a.y));
       ctx.lineTo(X(b.x), Y(b.y));
@@ -264,9 +265,9 @@ export class SwingPanel {
     ctx.setLineDash([]);
     const pulse = v.grabbing ? 0 : Math.sin(this.time * 4) * 1.2;
     ctx.strokeStyle = cc;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2 * u;
     ctx.beginPath();
-    ctx.arc(cx, cy, 7 + pulse, 0, Math.PI * 2);
+    ctx.arc(cx, cy, (7 + pulse) * u, 0, Math.PI * 2);
     ctx.stroke();
     if (v.grabbing) {
       ctx.fillStyle = cc;
@@ -275,17 +276,19 @@ export class SwingPanel {
       ctx.globalAlpha = 1;
     }
     ctx.beginPath();
-    ctx.moveTo(cx - 11, cy);
-    ctx.lineTo(cx - 4, cy);
-    ctx.moveTo(cx + 4, cy);
-    ctx.lineTo(cx + 11, cy);
-    ctx.moveTo(cx, cy - 11);
-    ctx.lineTo(cx, cy - 4);
-    ctx.moveTo(cx, cy + 4);
-    ctx.lineTo(cx, cy + 11);
+    const a0 = 4 * u;
+    const a1 = 11 * u;
+    ctx.moveTo(cx - a1, cy);
+    ctx.lineTo(cx - a0, cy);
+    ctx.moveTo(cx + a0, cy);
+    ctx.lineTo(cx + a1, cy);
+    ctx.moveTo(cx, cy - a1);
+    ctx.lineTo(cx, cy - a0);
+    ctx.moveTo(cx, cy + a0);
+    ctx.lineTo(cx, cy + a1);
     ctx.stroke();
 
-    this.drawReadout(ctx, v, w, h);
+    this.drawReadout(ctx, v, w, h, u);
   }
 
   /** Simple original mannequin: legs, hips, torso, head, two arms meeting at the hands, club. */
@@ -405,37 +408,37 @@ export class SwingPanel {
     ctx.stroke();
   }
 
-  private drawReadout(ctx: CanvasRenderingContext2D, v: SwingPanelView, w: number, h: number) {
+  private drawReadout(ctx: CanvasRenderingContext2D, v: SwingPanelView, w: number, h: number, u: number) {
     const bands = v.speedBands;
     const cur = BAND_COL[speedBandIndex(v.speedMph, bands)];
     // Speed number (top-right).
     ctx.textAlign = 'right';
     ctx.textBaseline = 'alphabetic';
-    ctx.font = '700 20px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+    ctx.font = cfont(700, 20, u);
     ctx.fillStyle = v.speedMph > TRAIL_MIN_MPH ? cur : 'rgba(255,255,255,0.75)';
-    ctx.fillText(speedFromMph(v.speedMph, this.units), w - 10, 26);
-    ctx.font = '600 9px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+    ctx.fillText(speedFromMph(v.speedMph, this.units), w - 10, 26 * u);
+    ctx.font = cfont(600, 9, u);
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillText(`CLUBHEAD ${speedUnit(this.units).toUpperCase()}`, w - 10, 38);
+    ctx.fillText(`CLUBHEAD ${speedUnit(this.units).toUpperCase()}`, w - 10, 38 * u);
     if (this.peakMph > 0) {
       ctx.fillStyle = BAND_COL[speedBandIndex(this.peakMph, bands)];
-      ctx.fillText(`PEAK ${speedFromMph(this.peakMph, this.units)}`, w - 10, 50);
+      ctx.fillText(`PEAK ${speedFromMph(this.peakMph, this.units)}`, w - 10, 50 * u);
     }
     if (v.practice) {
       ctx.textAlign = 'left';
-      ctx.font = '700 9px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+      ctx.font = cfont(700, 9, u);
       const label = 'PRACTICE SWING';
       const tw = ctx.measureText(label).width;
       ctx.fillStyle = 'rgba(255,209,102,0.18)';
-      roundRect(ctx, 8, 22, tw + 12, 16, 8);
+      roundRect(ctx, 8, 22 * u, tw + 12 * u, 16 * u, 8 * u);
       ctx.fill();
       ctx.fillStyle = '#ffd166';
-      ctx.fillText(label, 14, 33.5);
+      ctx.fillText(label, 8 + 6 * u, 33.5 * u);
     }
     // Speed meter strip along the bottom: zones by speed band, marker at current/peak.
     const mx = 10;
     const mw = w - 20;
-    const my = h - 9;
+    const my = h - 9 * u;
     const max = bands[2] * 1.18;
     const zx = (mph: number) => mx + Math.min(1, mph / max) * mw;
     const zones: [number, number, string][] = [
@@ -447,19 +450,19 @@ export class SwingPanel {
     for (const [a, b, c] of zones) {
       ctx.fillStyle = c;
       ctx.globalAlpha = 0.45;
-      ctx.fillRect(zx(a), my, Math.max(0, zx(b) - zx(a) - 1), 3);
+      ctx.fillRect(zx(a), my, Math.max(0, zx(b) - zx(a) - 1), 3 * u);
     }
     ctx.globalAlpha = 1;
     if (this.peakMph > 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.6)';
-      ctx.fillRect(zx(this.peakMph) - 1, my - 3, 2, 9);
+      ctx.fillRect(zx(this.peakMph) - u, my - 3 * u, 2 * u, 9 * u);
     }
     ctx.fillStyle = cur;
     ctx.beginPath();
     const px = zx(v.speedMph);
-    ctx.moveTo(px, my - 1);
-    ctx.lineTo(px - 4, my - 7);
-    ctx.lineTo(px + 4, my - 7);
+    ctx.moveTo(px, my - u);
+    ctx.lineTo(px - 4 * u, my - 7 * u);
+    ctx.lineTo(px + 4 * u, my - 7 * u);
     ctx.closePath();
     ctx.fill();
   }

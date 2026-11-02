@@ -32,6 +32,7 @@ export const UI_CSS = /* css */ `
 .tl-root * { box-sizing: border-box; }
 .tl-root button, .tl-root input, .tl-root select, .tl-root .tl-interactive { pointer-events: auto; font-family: inherit; }
 .tl-hidden { display: none !important; }
+.tl-root button:focus-visible, .tl-root input:focus-visible { outline: 2px solid var(--tl-gold); outline-offset: 2px; }
 
 /* Glass panel */
 .tl-panel {
@@ -302,7 +303,7 @@ export const UI_CSS = /* css */ `
 @keyframes tl-blink { 50% { opacity: 0.45; } }
 @keyframes tl-glow { 50% { box-shadow: 0 0 1.4em rgba(255,200,90,0.65); } }
 @media (prefers-reduced-motion: reduce) { .tl-root * { animation-duration: 0.01s !important; transition-duration: 0.01s !important; } }
-@media (max-aspect-ratio: 4/3) { .tl-swing { width: 16.5em; height: 15em; } .tl-club { width: 14em; height: 16em; } .tl-shot { bottom: 18.4em; } .tl-map { width: 10em; height: 13em; } }
+@media (max-aspect-ratio: 4/3) { .tl-map { width: 10.5em; height: 14em; } }
 `;
 
 let injected = false;

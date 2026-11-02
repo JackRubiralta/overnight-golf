@@ -9,7 +9,7 @@
  * underneath show the true values.
  */
 import type { ClubPanelView } from '../core/view';
-import { fitCanvas, h, setText, toggle } from './dom';
+import { cfont, fitCanvas, h, panelScale, setText, toggle } from './dom';
 import { lr, signed } from './format';
 
 // ── tuning ──────────────────────────────────────────────────────────────
@@ -64,6 +64,7 @@ export class ClubPanel {
     const f = fitCanvas(this.canvas);
     if (!f) return;
     const { ctx, w, h: hh } = f;
+    const u = panelScale(w * 1.15); // text / marker scale (panel is a bit narrower than the swing panel)
     const bx = w * 0.56;
     const by = hh * 0.6;
     const len = Math.min(w, hh) * 0.5;
@@ -114,11 +115,11 @@ export class ClubPanel {
     ctx.lineWidth = 1.5;
     ray(0, 10, len * 1.6);
     ctx.globalAlpha = 1;
-    ctx.font = '700 8px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+    ctx.font = cfont(700, 8, u);
     ctx.fillStyle = 'rgba(255,209,102,0.75)';
     ctx.textAlign = 'center';
     ctx.textAlign = 'right';
-    ctx.fillText('AIM', bx - 5, 12);
+    ctx.fillText('AIM', bx - 5, 12 * u);
 
     // Start-line hint.
     if (v.startLine !== null) {
@@ -241,23 +242,23 @@ export class ClubPanel {
     ctx.shadowColor = 'rgba(0,0,0,0.6)';
     ctx.shadowBlur = 4;
     ctx.beginPath();
-    ctx.arc(bx, by, 5, 0, Math.PI * 2);
+    ctx.arc(bx, by, 5 * u, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
 
     // Legend.
-    ctx.font = '600 8px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+    ctx.font = cfont(600, 8, u);
     ctx.textAlign = 'left';
     const items: [string, string][] = [['FACE', FACE_COL], ['PATH', PATH_COL]];
     if (v.startLine !== null) items.push(['START', START_COL]);
     items.forEach(([t, c], i) => {
       ctx.fillStyle = c;
-      ctx.fillRect(8, 9 + i * 11, 8, 2);
+      ctx.fillRect(8, (9 + i * 11) * u, 8 * u, 2 * u);
       ctx.fillStyle = 'rgba(255,255,255,0.6)';
-      ctx.fillText(t, 20, 12 + i * 11);
+      ctx.fillText(t, 8 + 12 * u, (12 + i * 11) * u);
     });
     ctx.textAlign = 'right';
     ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.fillText(`angles ×${ANGLE_GAIN}`, w - 8, hh - 6);
+    ctx.fillText(`angles ×${ANGLE_GAIN}`, w - 8, hh - 6 * u);
   }
 }

@@ -54,7 +54,8 @@ const HEIGHT_MUL = 1.0;
 const WEDGE_MARGIN = 0.12;
 /** Always cover this many metres around the camera (blades beside/behind the near plane). */
 const NEAR_PAD = 2.5;
-const TRANS_TINT = new THREE.Color(1.0, 1.05, 0.6);
+/** Transmission tint: chlorophyll-filtered light is a saturated yellow-green, not the sun's orange. */
+const TRANS_TINT = new THREE.Color(0.85, 1.2, 0.4);
 const TRANS_STRENGTH = 0.75;
 /** Multiplier on the PBR specular (direct + IBL). */
 const SPECULAR = 0.25;

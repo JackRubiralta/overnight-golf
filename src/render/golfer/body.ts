@@ -23,7 +23,7 @@ export const DIM = {
   waist: 0.11, // pelvis centre → waist (chest origin)
   hipX: 0.092,
   hipY: -0.05,
-  shoulderX: 0.178,
+  shoulderX: 0.172,
   shoulderY: 0.395, // above the waist
   shoulderZ: -0.025,
   neckY: 0.45,
@@ -75,7 +75,7 @@ export interface Outfit {
 }
 
 export const DEFAULT_OUTFIT: Outfit = {
-  shirt: 0x1f3656,
+  shirt: 0x2b4f78,
   shirtTrim: 0xe9e6dc,
   trousers: 0xb7a98a,
   belt: 0x3b2a1d,
@@ -115,8 +115,8 @@ export function buildGolferGeometry(o: Outfit = DEFAULT_OUTFIT) {
     20,
   );
   b.add(hips, Bone.Pelvis, trousers, M.s(1, 1, 0.74));
-  // Seat (slight bulge at the back).
-  b.add(ellipsoid(0.13, 0.09, 0.07), Bone.Pelvis, trousers, M.t(0, -0.04, -0.06));
+  // Seat: two soft lobes at the back.
+  for (const sx of [1, -1]) b.add(ellipsoid(0.085, 0.085, 0.07, 14, 10), Bone.Pelvis, trousers, M.t(sx * 0.06, -0.045, -0.045));
   // Belt + buckle.
   b.add(cyl(0.151, 0.149, 0.1, 0.13, 20, true), Bone.Pelvis, { color: o.belt, rough: 0.4 }, M.s(1, 1, 0.75));
   b.add(new THREE.BoxGeometry(0.03, 0.022, 0.006), Bone.Pelvis, { color: 0xc9c4b8, rough: 0.25, metal: 1 }, M.t(0, 0.115, 0.113));
@@ -129,9 +129,9 @@ export function buildGolferGeometry(o: Outfit = DEFAULT_OUTFIT) {
       [0.136, 0.03],
       [0.146, 0.12],
       [0.162, 0.22],
-      [0.168, 0.3],
-      [0.158, 0.37],
-      [0.125, 0.42],
+      [0.17, 0.3],
+      [0.166, 0.36],
+      [0.14, 0.41],
       [0.075, 0.455],
       [0.0, 0.46],
     ].map(([r, y]) => new THREE.Vector2(r, y)),
@@ -159,7 +159,7 @@ export function buildGolferGeometry(o: Outfit = DEFAULT_OUTFIT) {
     const up = side > 0 ? Bone.UpperL : Bone.UpperR;
     const fo = side > 0 ? Bone.ForeL : Bone.ForeR;
     const ha = side > 0 ? Bone.HandL : Bone.HandR;
-    b.add(ellipsoid(0.068, 0.07, 0.066), up, shirt, M.t(0, 0.01, 0)); // deltoid / sleeve cap
+    b.add(ellipsoid(0.058, 0.064, 0.058), up, shirt, M.t(0, 0.03, 0)); // deltoid / sleeve cap
     b.add(limb(0.066, 0.058, 0.15, 14), up, shirt); // short sleeve
     const cuff = new THREE.TorusGeometry(0.057, 0.0045, 4, 16);
     cuff.rotateX(Math.PI / 2);
