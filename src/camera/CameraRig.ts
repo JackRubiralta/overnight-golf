@@ -66,11 +66,16 @@ export class CameraRig {
     const right = new THREE.Vector3().crossVectors(aimDir, UP).normalize();
     // Framed so the ball sits ~12-14° below the screen centre: clear of the bottom HUD
     // (club bar / hint) while the target line still runs up the middle of the screen.
-    const back = putting ? 3.0 : 4.6;
     const up = putting ? 1.2 : 1.6;
-    // Putting: straight down the line (the golfer stands left of it, out of the way).
-    this.targetPos.copy(ball).addScaledVector(aimDir, -back).addScaledVector(right, putting ? 0.05 : -0.55).addScaledVector(UP, up);
-    const g = this.camGround(this.targetPos.x, this.targetPos.z) + 0.6;
+    const side = putting ? 0.05 : -0.55; // putting: straight down the line (golfer stands left of it)
+    // Nominal distance behind the ball; on a bank rising behind the ball, come closer instead of
+    // burying the camera in the hillside (and the grass) far above the ball.
+    const backs = putting ? [3.0, 2.4, 1.9] : [4.6, 3.8, 3.1, 2.5];
+    for (const back of backs) {
+      this.targetPos.copy(ball).addScaledVector(aimDir, -back).addScaledVector(right, side).addScaledVector(UP, up);
+      if (this.targetPos.y >= this.camGround(this.targetPos.x, this.targetPos.z) + 0.6) break;
+    }
+    const g = this.camGround(this.targetPos.x, this.targetPos.z) + 0.9; // clear of tall rough
     if (this.targetPos.y < g) this.targetPos.y = g;
     addressLook(this.targetPos, ball, aimDir, putting, this.targetLook);
     damp(this.pos, this.targetPos, 6, dt);

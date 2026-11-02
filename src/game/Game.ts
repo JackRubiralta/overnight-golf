@@ -972,6 +972,14 @@ export class Game {
       debugShot: (o: DebugShotOpts = {}) => game.debugShot(o),
       /** Predict where a synthetic stroke would finish (no side effects). */
       debugPredict: (o: DebugShotOpts & { clubSpeed: number }) => game.debugPredict(o),
+      /** Move the ball to (x, z) and address it there (slope / lie checks). */
+      debugPlace: (x: number, z: number) => {
+        game.placeBall(new THREE.Vector3(x, 0, z));
+        game.prevBall.copy(game.ball);
+        game.swing.aim = 0;
+        game.goToBall();
+        return { x: game.ball.x, y: game.ball.y, z: game.ball.z, lie: game.lie() };
+      },
       /** Walk straight to the ball and address it (same as F). */
       goToBall: () => game.goToBall(),
       /** Aim offset relative to the pin line (deg, + right). */
