@@ -67,3 +67,22 @@ Decisions made autonomously during the overnight build, with the reasoning. Newe
 
 - **Swing panel mirrored and enlarged**: the target is on the right. Drag up-left, then swiftly down-right. The swing panel is 28 em and the club panel 24×27 em.
 - **Face/path drift**: an unstable "runaway" drift, where A/D and Q/E accelerate away from square during the swing, was tried and **rejected by the user**. The original gentle, bounded wobble is kept and must not be changed back to runaway behaviour.
+- **No 500-yard drives**: very fast or violent mouse flicks could push the driver to about 185 mph. Clubhead speed now saturates softly toward a per-club cap. Swings stay 1:1 up to 82% of the cap.
+
+  | Club | Cap (mph) |
+  |---|---|
+  | Driver | 118 |
+  | Wood | 114 |
+  | Hybrid | 110 |
+  | Iron | 102 |
+  | Wedge | 95 |
+
+  Fairway and tee roll-out were also firmed up.
+
+  | Drive | Carry | Total |
+  |---|---|---|
+  | Best possible, calm | ~295 yd | ~323 yd |
+  | Best possible, strong tailwind | — | ~380 yd |
+  | Typical good drive | ~245 yd | ~275 yd |
+
+  Over-swinging now mostly adds error (face flail), not distance.
