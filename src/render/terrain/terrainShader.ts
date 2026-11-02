@@ -149,7 +149,7 @@ float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 // ~0.05–0.12 and AgX tone mapping lifts it.
 const C = {
   fairwayA: '0.046, 0.140, 0.015',
-  fairwayB: '0.072, 0.194, 0.024',
+  fairwayB: '0.067, 0.182, 0.022',
   firstCut: '0.042, 0.122, 0.015',
   greenA: '0.050, 0.160, 0.026',
   greenB: '0.066, 0.192, 0.033',
@@ -165,8 +165,8 @@ const C = {
   straw: '0.140, 0.120, 0.055',
   needles: '0.048, 0.040, 0.022',
   moss: '0.030, 0.052, 0.014',
-  rockA: '0.115, 0.108, 0.098',
-  rockB: '0.068, 0.064, 0.058',
+  rockA: '0.122, 0.110, 0.092',
+  rockB: '0.070, 0.063, 0.053',
   lichen: '0.110, 0.112, 0.070',
   canopyA: '0.012, 0.030, 0.010',
   canopyB: '0.032, 0.056, 0.016',
@@ -174,7 +174,7 @@ const C = {
   sand: '0.400, 0.295, 0.165',
   sandWet: '0.230, 0.165, 0.092',
   soil: '0.075, 0.052, 0.032',
-  asphalt: '0.052, 0.052, 0.055',
+  asphalt: '0.056, 0.054, 0.052',
   asphaltWorn: '0.085, 0.082, 0.080',
   gravel: '0.150, 0.130, 0.100',
   mud: '0.068, 0.056, 0.036',
@@ -316,7 +316,7 @@ tSpec = 0.12;
     col = mix(col, rock, rockW);
     tGrad = mix(tGrad, rk.yz * 0.22 * 2.4 * vis(fp, 0.5), rockW);
     tRough = mix(tRough, 0.85, rockW);
-    tSpec = mix(tSpec, 0.8, rockW);
+    tSpec = mix(tSpec, 0.45, rockW);
   }
 
   // ---- first cut (collar around fairways and tees; the gameplay 'fringe' band)
@@ -390,7 +390,7 @@ tSpec = 0.12;
     tGrad = mix(tGrad, ag.yz * 26.0 * 0.006 * vis(fp, 26.0), pathW);
     tGrad = mix(tGrad, tGrad + ag.yz * 26.0 * 0.01 * vis(fp, 26.0), shoulderW * (1.0 - pathW));
     tRough = mix(tRough, 0.78, pathW);
-    tSpec = mix(tSpec, 0.8, pathW);
+    tSpec = mix(tSpec, 0.45, pathW);
   }
 
   // ---- tees: mown in the direction of play, with divots

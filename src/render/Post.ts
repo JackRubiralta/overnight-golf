@@ -32,7 +32,7 @@ import { GradeEffect } from './post/GradeEffect';
 import { patchN8AO } from './post/n8aoCompat';
 
 // ---- tuning -------------------------------------------------------------------------------
-const BLOOM = { threshold: 3.0, smoothing: 1.2, intensity: 0.55, radius: 0.62, levels: 5 }; // HDR threshold: only sun, glints, hot cloud rims
+const BLOOM = { threshold: 4.0, smoothing: 3.0, intensity: 0.35, radius: 0.6, levels: 5 }; // HDR threshold: only sun, glints, hot cloud rims
 const AO = { radius: 1.6, falloff: 1.0, intensity: 2.2 };
 const DOF = { bokehScale: 3.0, rangeFraction: 0.35, minRange: 1.5 };
 
@@ -137,7 +137,6 @@ export class Post implements PostPipeline {
     }
     effects.push(this.tone, this.grade);
     this.mainPass = new EffectPass(camera, ...effects);
-    this.mainPass.dithering = true;
     this.composer.addPass(this.mainPass);
 
     if (q.smaa) {
@@ -145,6 +144,8 @@ export class Post implements PostPipeline {
       this.smaaPass = new EffectPass(camera, this.smaa);
       this.composer.addPass(this.smaaPass);
     }
+    // dither where the image is quantised to 8 bits (the last pass) to hide sky banding
+    (this.smaaPass ?? this.mainPass).dithering = true;
     this.setSize();
   }
 

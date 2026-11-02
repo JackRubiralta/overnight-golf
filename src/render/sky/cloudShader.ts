@@ -21,7 +21,7 @@ const PLANET_R = 60000; // m: clouds curve down toward the horizon
 const WEATHER_SCALE = 16000; // m per weather-map tile
 const SHAPE_SCALE = 5200; // m per shape tile (6 billow cells → ~850 m clouds)
 const DETAIL_SCALE = 480; // m per 3D detail tile
-const AERIAL_DIST = 22000; // m: clouds this far are ~63% dissolved into the sky
+const AERIAL_DIST = 30000; // m: clouds this far are ~63% dissolved into the sky
 /** Extinction toward the sun relative to the view ray (art-directed: < 1 lets light reach in). */
 const LIGHT_ABSORB = 0.4;
 

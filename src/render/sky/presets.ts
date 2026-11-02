@@ -69,9 +69,9 @@ export const TIME_PRESETS: Record<Settings['timeOfDay'], TimePreset> = {
     exposure: 0.92,
   },
   golden: {
-    elevation: 8.5, azimuth: 242, turbidity: 4.0, rayleigh: 2.4, mieCoefficient: 0.0045, mieDirectionalG: 0.86, skyIntensity: 1.0,
-    sunColor: 0xffc189, sunIntensity: 3.0, sunDiscColor: 0xffcf96, sunDiscIntensity: 45,
-    hemiSky: 0xa4b7dc, hemiGround: 0x5a5330, hemiIntensity: 0.35, envIntensity: 0.65,
+    elevation: 12, azimuth: 242, turbidity: 4.0, rayleigh: 2.4, mieCoefficient: 0.004, mieDirectionalG: 0.82, skyIntensity: 1.0,
+    sunColor: 0xffb878, sunIntensity: 3.5, sunDiscColor: 0xffcf96, sunDiscIntensity: 45,
+    hemiSky: 0xa4b7dc, hemiGround: 0x5a5330, hemiIntensity: 0.3, envIntensity: 0.65,
     fog: 0xc4c0bd, fogSun: 0xffc994, fogDensity: 0.0008, fogHeight: 140, skyHaze: 0.5,
     cloudLit: 0xffc890, cloudLitIntensity: 1.7, cloudShade: 0x7f88a6, cloudShadeIntensity: 0.36, cloudCoverage: 0.44,
     exposure: 1.0,

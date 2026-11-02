@@ -865,7 +865,8 @@ export class DynamicProps {
       this.shardMeshes[k].setMatrixAt(p.potIndex, _m);
       this.shardMeshes[k].instanceMatrix.needsUpdate = true;
     });
-    this.onBreak?.({ id: p.id, kind: 'pot', pos: p.pos.clone(), speed: burst });
+    // Ball-driven breaks are reported by the hit itself; only report secondary breaks here.
+    if (!impulse) this.onBreak?.({ id: p.id, kind: 'pot', pos: p.pos.clone(), speed: burst });
   }
 
   /** Number of currently simulated (awake) bodies — for debugging/perf HUDs. */

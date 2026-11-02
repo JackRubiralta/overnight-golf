@@ -90,7 +90,10 @@ function segDist(px: number, pz: number, a: P2, b: P2) {
 }
 
 const PLAY_LINES: P2[][] = HOLES.map((h) => [h.tee, ...h.fairway, h.green.c]);
-function playLineDist(x: number, z: number) {
+function playLineDist(x: number, z: number, corridor: number) {
+  // corridor (distance to the nearest fairway/green/tee) bounds the play-line distance closely
+  // enough: far from every hole there is nothing to test.
+  if (corridor >= 110) return corridor;
   let d = Infinity;
   for (const pl of PLAY_LINES) for (let i = 0; i < pl.length - 1; i++) d = Math.min(d, segDist(x, z, pl[i], pl[i + 1]));
   return d;
@@ -181,7 +184,7 @@ export function placeFoliage(course: Course, seed = 2024): PlacementResult {
       }
       if (!baseClear(x, z, specimen ? 14 : 18, 5, 3)) continue;
       if (!landmarkClear(x, z, 0)) continue;
-      if (playLineDist(x, z) < (specimen ? PLAYLINE_SPECIMEN : PLAYLINE_TREE)) continue;
+      if (playLineDist(x, z, corr) < (specimen ? PLAYLINE_SPECIMEN : PLAYLINE_TREE)) continue;
       const variant = specimen ? [S.oakA, S.oakB, S.lime][Math.floor(r * 3)] : pickTreeSpecies(x, z, rng);
       const scale = specimen ? rng.range(1.0, 1.3) : rng.range(0.78, 1.18);
       const inPlay = corr < IN_PLAY;
@@ -204,7 +207,7 @@ export function placeFoliage(course: Course, seed = 2024): PlacementResult {
       if (roll > edgeBand * 0.25 + rough + dens * 0.05) continue;
       if (!baseClear(x, z, 15, 3, 2.5)) continue;
       if (!landmarkClear(x, z, -10)) continue;
-      if (playLineDist(x, z) < PLAYLINE_BUSH) continue;
+      if (playLineDist(x, z, corr) < PLAYLINE_BUSH) continue;
       const scale = rng.range(0.7, 1.35);
       bushes.push({ x, z, y: groundY(x, z, 0.3) - 0.08, yaw: rng.next() * Math.PI * 2, scale, variant: r < 0.55 ? S.bushA : S.bushB, r, rank: corr < IN_PLAY ? r * 0.01 : 0.01 + r });
     }
@@ -220,12 +223,14 @@ export function placeFoliage(course: Course, seed = 2024): PlacementResult {
       const edge = Math.max(Math.abs(x), Math.abs(z));
       const rim = Math.min(1, Math.max(0, (edge - 560) / 200));
       const cl = vnoise(x / 70, z / 70, 31);
-      const p = (rim * 0.3 + Math.min(1, g.slope(x, z) * 1.2) * 0.25 + 0.025) * (cl > 0.55 ? 1.5 : 0.3);
+      const k = cl > 0.55 ? 1.5 : 0.3;
+      if (roll > (rim * 0.3 + 0.275) * k) continue; // cheap upper bound before the slope lookups
+      const p = (rim * 0.3 + Math.min(1, g.slope(x, z) * 1.2) * 0.25 + 0.025) * k;
       if (roll > p) continue;
       if (!baseClear(x, z, 20, 4, 3)) continue;
       if (!landmarkClear(x, z, 0)) continue;
-      if (playLineDist(x, z) < PLAYLINE_ROCK) continue;
       const corr = g.corridor(x, z);
+      if (playLineDist(x, z, corr) < PLAYLINE_ROCK) continue;
       const n = 1 + Math.floor(rng.next() * 3.5);
       for (let k = 0; k < n; k++) {
         const ox = x + (k ? rng.sym(4) : 0);
@@ -252,7 +257,7 @@ export function placeFoliage(course: Course, seed = 2024): PlacementResult {
       if (roll > (drift - 0.55) * 2.2 * (1 - dens)) continue;
       if (!baseClear(x, z, 14, 2, 1.5)) continue;
       if (!landmarkClear(x, z, -15)) continue;
-      if (playLineDist(x, z) < PLAYLINE_FLOWER) continue;
+      if (playLineDist(x, z, corr) < PLAYLINE_FLOWER) continue;
       const r = rng.next();
       flowers.push({ x, z, y: course.height(x, z), yaw: rng.next() * Math.PI * 2, scale: rng.range(0.8, 1.25), variant: vnoise(x / 120, z / 120, 52) > 0.5 ? 1 : 0, r, rank: r });
     }

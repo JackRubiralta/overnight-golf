@@ -71,6 +71,7 @@ export class WaterSystem implements RenderModule {
   private uReflBody = { value: -1 };
   private frustum = new THREE.Frustum();
   private projView = new THREE.Matrix4();
+  private hiddenTmp: THREE.Object3D[] = [];
 
   init(ctx: InitContext) {
     this.quality = ctx.quality;
@@ -237,10 +238,12 @@ export class WaterSystem implements RenderModule {
     const b = this.activeBody(cam);
     if (!b) return;
     // Hide named heavy/irrelevant groups (grass, rain, effects) for the reflection pass.
-    const extra: THREE.Object3D[] = [];
+    const extra = this.hiddenTmp;
+    extra.length = 0;
     for (const o of ctx.scene.children) if (o.visible && NO_REFLECT_NAMES.has(o.name)) { o.visible = false; extra.push(o); }
     const ok = this.reflection.render(ctx.renderer, ctx.scene, cam, b.level);
     for (const o of extra) o.visible = true;
+    extra.length = 0;
     if (ok) this.uReflBody.value = this.bodies.indexOf(b);
   }
 

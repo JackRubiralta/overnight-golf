@@ -382,7 +382,7 @@ function barkSample(kind: BarkKind, u: number, v: number, seed: number): { h: nu
   const h = Math.pow(r, 1.6);
   const fine = tileFbm(u, v, 24, 12, 2, seed + 4);
   const lichen = Math.max(0, tileFbm(u, v, 5, 6, 3, seed + 8) - 0.6) * 2.5;
-  const base = 0.24 + 0.16 * h + 0.06 * fine;
+  const base = 0.15 + 0.13 * h + 0.05 * fine;
   const c: [number, number, number] = [base * 1.02, base * 0.92, base * 0.8];
   c[0] = c[0] * (1 - lichen) + 0.42 * lichen;
   c[1] = c[1] * (1 - lichen) + 0.46 * lichen;

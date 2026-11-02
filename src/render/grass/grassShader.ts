@@ -273,9 +273,9 @@ void grassVertex(out vec3 outPos, out vec3 outN) {
   vGrassCol = col;
 
   // Ambient occlusion at the root (deeper in long, dense grass).
-  float aoBase = mix(0.82, mix(0.4, 0.25, wDeep * clump), longness);
+  float aoBase = mix(0.88, mix(0.4, 0.25, wDeep * clump), longness);
   vGrassAO = mix(aoBase, 1.0, smoothstep(0.0, 0.85, t));
-  vGrassTrans = mix(0.08, 0.85, longness) * smoothstep(0.05, 0.6, t) * (1.0 - 0.6 * farK);
+  vGrassTrans = mix(0.3, 0.85, longness) * smoothstep(0.05, 0.6, t) * (1.0 - 0.6 * farK);
 }
 `;
 

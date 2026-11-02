@@ -23,8 +23,8 @@ export const DIM = {
   waist: 0.11, // pelvis centre → waist (chest origin)
   hipX: 0.092,
   hipY: -0.05,
-  shoulderX: 0.172,
-  shoulderY: 0.395, // above the waist
+  shoulderX: 0.166,
+  shoulderY: 0.378, // above the waist
   shoulderZ: -0.025,
   neckY: 0.45,
   neckLen: 0.115,
@@ -130,8 +130,8 @@ export function buildGolferGeometry(o: Outfit = DEFAULT_OUTFIT) {
       [0.146, 0.12],
       [0.162, 0.22],
       [0.17, 0.3],
-      [0.166, 0.36],
-      [0.14, 0.41],
+      [0.165, 0.355],
+      [0.138, 0.4],
       [0.075, 0.455],
       [0.0, 0.46],
     ].map(([r, y]) => new THREE.Vector2(r, y)),
@@ -159,7 +159,7 @@ export function buildGolferGeometry(o: Outfit = DEFAULT_OUTFIT) {
     const up = side > 0 ? Bone.UpperL : Bone.UpperR;
     const fo = side > 0 ? Bone.ForeL : Bone.ForeR;
     const ha = side > 0 ? Bone.HandL : Bone.HandR;
-    b.add(ellipsoid(0.058, 0.064, 0.058), up, shirt, M.t(0, 0.03, 0)); // deltoid / sleeve cap
+    b.add(ellipsoid(0.052, 0.068, 0.052), up, shirt, M.t(0, 0.05, 0)); // deltoid / sleeve cap
     b.add(limb(0.066, 0.058, 0.15, 14), up, shirt); // short sleeve
     const cuff = new THREE.TorusGeometry(0.057, 0.0045, 4, 16);
     cuff.rotateX(Math.PI / 2);

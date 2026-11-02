@@ -53,7 +53,7 @@ const SAND_DUST = [0.72, 0.62, 0.45];
 const SOIL_DUST = [0.2, 0.15, 0.1];
 const CLIP_A = [0.12, 0.26, 0.05];
 const CLIP_B = [0.2, 0.33, 0.08];
-const WATER_DROP = [0.75, 0.82, 0.86];
+const WATER_DROP = [0.9, 0.93, 0.95];
 const MIST = [0.85, 0.88, 0.9];
 
 const rnd = (a: number, b: number) => a + (b - a) * Math.random();
@@ -74,6 +74,8 @@ export class Effects implements RenderModule {
   private size = new THREE.Vector2();
   private testMode: string | null = null;
   private testDone = false;
+  /** Test hook: seconds until the bursts are re-emitted (so a screenshot always catches one). */
+  private testTimer = 0;
 
   init(ctx: InitContext) {
     this.course = ctx.course;
@@ -101,7 +103,10 @@ export class Effects implements RenderModule {
   update(ctx: FrameContext) {
     ctx.renderer.getDrawingBufferSize(this.size);
     updateFxScreen(ctx.camera, this.size.y || 720);
-    if (this.testMode && !this.testDone) this.runTest(ctx);
+    if (this.testMode) {
+      this.testTimer -= Math.min(ctx.dt, 0.1);
+      if (!this.testDone || this.testTimer <= 0) this.runTest(ctx);
+    }
     const dt = Math.min(ctx.dt, 0.1);
     this.step(dt);
     this.motes?.update(dt);
@@ -233,7 +238,7 @@ export class Effects implements RenderModule {
       const h = rnd(0.4, 2.6) * (0.5 + s);
       const k = rnd(0.85, 1.1);
       this.particles.spawn(pos.x, gy + 0.03, pos.z, Math.cos(a) * h, rnd(2, 6) * (0.4 + s), Math.sin(a) * h,
-        rnd(0.9, 1.6), rnd(0.012, 0.03), rnd(0.012, 0.03), SAND[0] * k, SAND[1] * k, SAND[2] * k, 1, 0.5, 9.8, PF_GROUND, SHAPE_GRAIN);
+        rnd(0.9, 1.6), rnd(0.02, 0.04), rnd(0.018, 0.035), SAND[0] * k, SAND[1] * k, SAND[2] * k, 1, 0.5, 9.8, PF_GROUND, SHAPE_GRAIN);
     }
     // Lingering dust cloud.
     const dust = this.n(10 + 18 * s);
@@ -264,8 +269,8 @@ export class Effects implements RenderModule {
     // Central jet (Worthington column).
     const jet = this.n(16 + 26 * s);
     for (let i = 0; i < jet; i++) {
-      this.particles.spawn(pos.x + rnd(-0.06, 0.06), level, pos.z + rnd(-0.06, 0.06), rnd(-0.35, 0.35), rnd(3.5, 7.5) * (0.4 + s), rnd(-0.35, 0.35),
-        rnd(1.0, 1.8), rnd(0.05, 0.09), 0.03, WATER_DROP[0], WATER_DROP[1], WATER_DROP[2], 0.95, 0.2, 9.8, PF_GROUND, SHAPE_DROP, 0, level);
+      this.particles.spawn(pos.x + rnd(-0.06, 0.06), level, pos.z + rnd(-0.06, 0.06), rnd(-0.35, 0.35), rnd(3.5, 8.5) * (0.4 + s), rnd(-0.35, 0.35),
+        rnd(1.0, 1.8), rnd(0.06, 0.1), 0.035, WATER_DROP[0], WATER_DROP[1], WATER_DROP[2], 0.95, 0.2, 9.8, PF_GROUND, SHAPE_DROP, 0, level);
     }
     // Mist / spray haze.
     const mist = this.n(5 + 8 * s);
@@ -273,7 +278,7 @@ export class Effects implements RenderModule {
       const a = Math.random() * Math.PI * 2;
       const h = rnd(0.3, 1.2);
       this.particles.spawn(pos.x, level + rnd(0.1, 0.5), pos.z, Math.cos(a) * h, rnd(0.8, 2.5) * s + 0.3, Math.sin(a) * h,
-        rnd(1.0, 2.0), 0.15, rnd(0.5, 1.1) * (0.5 + s), MIST[0], MIST[1], MIST[2], 0.1, 2.5, 0.3, PF_WIND, SHAPE_SOFT);
+        rnd(1.0, 2.0), 0.15, rnd(0.5, 1.1) * (0.5 + s), MIST[0], MIST[1], MIST[2], 0.16, 2.5, 0.3, PF_WIND, SHAPE_SOFT);
     }
   }
 
@@ -342,7 +347,9 @@ export class Effects implements RenderModule {
   // ---- dev test hook -----------------------------------------------------------------------
 
   private runTest(ctx: FrameContext) {
+    const first = !this.testDone;
     this.testDone = true;
+    this.testTimer = 0.9;
     const course = ctx.course;
     const at = (x: number, z: number, up = 0) => new THREE.Vector3(x, course.height(x, z) + up, z);
     if (this.testMode === '1') {
@@ -366,12 +373,14 @@ export class Effects implements RenderModule {
         }
         if (end) this.tracerEnd();
       };
-      arc('straight', 205, 26, 0.01, 1, true);
-      arc('fade', 225, 31, 0.07, 1, true);
-      arc('draw', 240, 34, -0.08, 0.72, false);
+      if (first) {
+        arc('straight', 205, 26, 0.01, 1, true);
+        arc('fade', 225, 31, 0.07, 1, true);
+        arc('draw', 240, 34, -0.08, 0.72, false);
+      }
       this.impactFlash(tee, 1);
       this.divot(at(h.tee[0] - 1.6, h.tee[1] - 3.2), aim, 0.9);
-      this.preSim(0.18);
+      if (first) this.preSim(0.18);
     } else {
       const cam = ctx.camera;
       const fwd = cam.getWorldDirection(new THREE.Vector3());
@@ -397,7 +406,7 @@ export class Effects implements RenderModule {
       if (b) this.divot(b, fwd, 1);
       const c = dry(5.5, -0.6);
       if (c) this.landPuff(c, 'rough', 1);
-      this.preSim(0.3);
+      if (first) this.preSim(0.3);
     }
   }
 

@@ -43,7 +43,10 @@ async function run() {
   (window as unknown as { __hits: unknown[] }).__hits = hits;
   mods.props.onPropHit = (e) => hits.push({ id: e.id, kind: e.kind, speed: +e.speed.toFixed(1), impulse: e.impulse, broken: e.broken, score: e.score });
   // Give Rapier a moment to initialise.
+  const T0 = performance.now();
+  const log = (m: string) => console.log(`[inspect] ${m} @${Math.round(performance.now() - T0)}ms`);
   await mods.props.physicsReady;
+  log('physics ready');
   const shoot = p.get('shoot');
   const ctx = (dt: number): FrameContext => ({ time: world.time, dt, camera: world.camera, renderer: world.renderer, scene: world.scene, course, quality: world.quality, hole: 0, mode: 'flight' });
   if (shoot) {
@@ -54,7 +57,9 @@ async function run() {
     const vel = dir.multiplyScalar(speed * Math.cos((loft || 10) * DEG)).setY(speed * Math.sin((loft || 10) * DEG));
     sim.launch(vel, new THREE.Vector3(0, 0, 0));
     const T = Number(p.get('sim') ?? 3);
+    let n = 0;
     for (let t = 0; t < T; t += 1 / 60) {
+      if (n++ % 10 === 0) log(`sim t=${t.toFixed(2)} state=${sim.state}`);
       sim.update(1 / 60);
       world.time += 1 / 60;
       globalUniforms.uTime.value = world.time;
@@ -63,6 +68,7 @@ async function run() {
     mods.props.setBall(sim.pos);
     (window as unknown as { __sim: unknown }).__sim = { state: sim.state, pos: sim.pos.toArray().map((v) => +v.toFixed(2)), events: sim.events.filter((e) => e.type === 'object').map((e) => e.id) };
   }
+  log('rendering');
   let frames = 0;
   const loop = () => {
     world.frame(1 / 60);

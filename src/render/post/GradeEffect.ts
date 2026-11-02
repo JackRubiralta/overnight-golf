@@ -58,8 +58,8 @@ export class GradeEffect extends Effect {
     super('GradeEffect', FRAG, {
       blendFunction: BlendFunction.SRC,
       uniforms: new Map<string, THREE.Uniform>([
-        ['uShadowTint', new THREE.Uniform(o.shadowTint ?? new THREE.Color(0.96, 0.99, 1.05))],
-        ['uHighlightTint', new THREE.Uniform(o.highlightTint ?? new THREE.Color(1.04, 1.01, 0.95))],
+        ['uShadowTint', new THREE.Uniform(o.shadowTint ?? new THREE.Color(0.94, 0.98, 1.06))],
+        ['uHighlightTint', new THREE.Uniform(o.highlightTint ?? new THREE.Color(1.06, 1.0, 0.92))],
         ['uContrast', new THREE.Uniform(o.contrast ?? 1.12)],
         ['uSaturation', new THREE.Uniform(o.saturation ?? 1.12)],
         ['uVibrance', new THREE.Uniform(o.vibrance ?? 0.18)],

@@ -166,8 +166,8 @@ void main() {
     vec3 paint = vec3(0.9);
     vec3 soil = vec3(0.16, 0.12, 0.08);
     vec3 liner = vec3(0.55);
-    vec3 base = depth < 0.022 ? paint : (depth < 0.03 ? soil : liner * 0.6);
-    col = base * (0.18 * ao + 0.9 * lit * uSunColor);
+    vec3 base = depth < 0.015 ? paint : (depth < 0.026 ? soil : liner * 0.45);
+    col = base * (0.12 * ao + 0.8 * lit * uSunColor);
   }
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>

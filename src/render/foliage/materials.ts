@@ -20,6 +20,9 @@ const LEAF_SPECULAR = 0.35;
 /** Alpha-test threshold and mip compensation rate. */
 export const LEAF_ALPHA_TEST = 0.45;
 const ALPHA_MIP_BOOST = 0.28;
+/** Impostors have no self-shadowing (3D LODs get it from the shadow map): darken to match. */
+const IMPOSTOR_SHADE = 0.68;
+const IMPOSTOR_TRANS = 0.45;
 
 export type LodUniform = { value: THREE.Vector4 };
 
@@ -173,7 +176,9 @@ export function patchFoliage<M extends THREE.Material>(mat: M, p: FoliagePatch, 
       fs = fs
         .replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>\n${LEAF_LIGHT}`)
         // Canopy normals are valid for both faces: undo three's back-face flip.
-        .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n#ifdef DOUBLE_SIDED\n  normal *= faceDirection;\n  nonPerturbedNormal = normal;\n#endif');
+        .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n#ifdef DOUBLE_SIDED\n  normal *= faceDirection;\n  nonPerturbedNormal = normal;\n#endif')
+        // Leaves are mostly diffuse: sky reflections on thousands of cards read as grey haze.
+        .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n  reflectedLight.indirectSpecular *= uLeafSpecular;');
     }
     shader.fragmentShader = fs;
   };
@@ -259,7 +264,7 @@ export function createImpostorMaterial(atlas: ImpostorAtlas): THREE.MeshStandard
     uImpAlbedo: { value: atlas.albedo },
     uImpNormal: { value: atlas.normal },
     uTransTint: { value: LEAF_TRANS_TINT },
-    uTransStrength: { value: LEAF_TRANS_STRENGTH * 0.8 },
+    uTransStrength: { value: LEAF_TRANS_STRENGTH * IMPOSTOR_TRANS },
     uLeafSpecular: { value: LEAF_SPECULAR },
   };
   mat.onBeforeCompile = (shader) => {
@@ -282,11 +287,12 @@ export function createImpostorMaterial(atlas: ImpostorAtlas): THREE.MeshStandard
           float tlMip = max(0.0, 0.5 * log2(max(dot(tlDx, tlDx), dot(tlDy, tlDy))));
           tlA.a *= 1.0 + tlMip * ${ALPHA_MIP_BOOST.toFixed(3)};
         }
-        diffuseColor *= vec4(tlA.rgb * tlA.rgb, tlA.a);   // albedo stored as sqrt (gamma 2)
+        diffuseColor *= vec4(tlA.rgb * tlA.rgb * ${IMPOSTOR_SHADE.toFixed(3)}, tlA.a);   // albedo stored as sqrt (gamma 2)
         tlTransMask = tlN.a;
         `,
       )
       .replace('#include <alphatest_fragment>', `#include <alphatest_fragment>\n${LOD_DISCARD}`)
+      .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n  reflectedLight.indirectSpecular *= uLeafSpecular;')
       .replace(
         '#include <normal_fragment_begin>',
         /* glsl */ `

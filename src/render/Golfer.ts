@@ -23,6 +23,8 @@ import { ClubTrail } from './golfer/trail';
 // ---- tuning -------------------------------------------------------------------------------
 /** Seconds to cross-fade between walk and swing poses. */
 const MODE_BLEND = 0.3;
+/** Don't cross-fade poses when the golfer jumps further than this (m). */
+const MAX_BLEND_JUMP = 2.5;
 /** Max terrain height difference applied to a foot (m). */
 const MAX_FOOT_LIFT = 0.25;
 /** Debug camera preset from the URL (visual checks only). */
@@ -102,6 +104,7 @@ export class Golfer implements RenderModule {
   update(ctx: FrameContext) {
     if (this.blendT < 1) this.commit(ctx.dt);
     this.trail.update(performance.now() / 1000);
+    if (DEBUG_CAM) (window as unknown as { __golfer?: Golfer }).__golfer = this;
     if (DEBUG_CAM) this.debugCamera(ctx.camera, (window as unknown as { __golfercam?: string }).__golfercam ?? DEBUG_CAM);
   }
 
@@ -117,10 +120,14 @@ export class Golfer implements RenderModule {
       back: [-0.3, 1.5, -3.2, 1.0], // directly behind the golfer
       top: [-0.2, 4.5, -0.4, 0.4],
       club: [0.6, 0.35, 0.9, 0.05], // close on the clubhead at address
+      grip: [0.25, 1.05, 0.35, 0.8], // close on the hands at address
+      walk: [2.2, 1.4, 2.6, 0.95], // walker frame: front-left three-quarter
     };
     const c = presets[name] ?? presets.behind;
     const look = new THREE.Vector3(-0.2, c[3], -0.6);
     if (name === 'club') look.set(-0.02, 0.03, 0);
+    if (name === 'grip') look.set(-0.08, 0.82, -0.62);
+    if (name === 'walk') look.set(0, 0.95, 0);
     cam.position.set(c[0], c[1], c[2]).applyMatrix4(this.frame);
     cam.lookAt(look.applyMatrix4(this.frame));
   }
@@ -149,12 +156,16 @@ export class Golfer implements RenderModule {
     this.trailSpeed = speedMph;
   }
 
+  /** Last pose passed to setSwingPose (for debugging / replays). */
+  lastSwingPose: GolferPose | null = null;
+
   /** Address/swing pose. */
   setSwingPose(p: GolferPose) {
     if (!this.clubs) return;
+    this.lastSwingPose = p;
     const dt = this.stepClock();
     this.clubKind = p.clubKind;
-    this.switchMode('swing');
+    const prevOrigin = this.tmpS.setFromMatrixPosition(this.frame).clone();
     // Golfer frame: origin at the ground under the ball, X = aim, Y = up, Z = X × Y.
     const x = this.tmpP.set(p.aimDir.x, 0, p.aimDir.z);
     if (x.lengthSq() < 1e-8) x.set(0, 0, -1);
@@ -162,8 +173,12 @@ export class Golfer implements RenderModule {
     const y = new THREE.Vector3(0, 1, 0);
     const z = new THREE.Vector3().crossVectors(x, y);
     this.frame.makeBasis(x, y, z).setPosition(p.ballPos.x, p.ballPos.y - p.swing.ballY, p.ballPos.z);
+    this.switchMode('swing', prevOrigin);
+    const inp = { swing: p.swing, club: this.clubs[p.clubKind], face: p.face, stance: p.stance, dt };
     this.terrainLift();
-    this.rig.solveSwing({ swing: p.swing, club: this.clubs[p.clubKind], face: p.face, stance: p.stance, dt });
+    this.rig.solveSwing(inp);
+    // Feet moved (first pose / club change): re-sample the terrain under them and re-solve.
+    if (this.terrainLift()) this.rig.solveSwing({ ...inp, dt: 0 });
     this.commit(0);
     if (this.trail.enabled) {
       const mph = this.trailSpeed >= 0 ? this.trailSpeed : p.swing.speedMph;
@@ -177,10 +192,12 @@ export class Golfer implements RenderModule {
   setWalkPose(pos: THREE.Vector3, yaw: number, speed: number) {
     if (!this.clubs) return;
     const dt = this.stepClock();
-    this.switchMode('walk');
+    const prevOrigin = this.tmpS.setFromMatrixPosition(this.frame).clone();
     this.frame.makeRotationY(yaw + Math.PI).setPosition(pos);
+    this.switchMode('walk', prevOrigin);
     this.terrainLift();
     this.rig.solveWalk(this.clubs[this.clubKind], speed, dt);
+    if (this.terrainLift()) this.rig.solveWalk(this.clubs[this.clubKind], speed, 0);
     this.commit(0);
   }
 
@@ -205,9 +222,11 @@ export class Golfer implements RenderModule {
     return dt;
   }
 
-  private switchMode(m: 'swing' | 'walk') {
+  private switchMode(m: 'swing' | 'walk', prevOrigin: THREE.Vector3) {
     if (this.mode === m) return;
-    if (this.mode !== 'none') {
+    // Cross-fade only when the golfer stays roughly in place (not after a teleport).
+    const near = prevOrigin.distanceTo(this.tmpP.setFromMatrixPosition(this.frame)) < MAX_BLEND_JUMP;
+    if (this.mode !== 'none' && near) {
       // Capture the current world pose to cross-fade from.
       for (let i = 0; i < BONE_COUNT; i++) this.bones[i].matrixWorld.decompose(this.from[i].p, this.from[i].q, this.from[i].s);
       this.blendT = 0;
@@ -216,16 +235,25 @@ export class Golfer implements RenderModule {
     this.mode = m;
   }
 
-  /** Terrain under each foot relative to the frame origin (one-frame lag on the probe). */
+  /**
+   * Terrain height under each foot relative to the frame origin, sampled at the feet of the
+   * previous solve. Returns true when a foot moved noticeably since the last sample (the caller
+   * then re-solves so the feet sit on the ground on the very first frame too).
+   */
   private terrainLift() {
-    if (!this.course) return;
+    if (!this.course) return false;
     const oy = this.frame.elements[13];
+    let moved = false;
     for (let i = 0; i < 2; i++) {
       const w = this.tmpS.copy(this.rig.footProbe[i]).applyMatrix4(this.frame);
+      if (w.distanceToSquared(this.lastProbe[i]) > 0.04) moved = true;
+      this.lastProbe[i].copy(w);
       const h = this.course.height(w.x, w.z) - oy;
       this.rig.footLift[i] = Number.isFinite(h) ? Math.max(-MAX_FOOT_LIFT, Math.min(MAX_FOOT_LIFT, h)) : 0;
     }
+    return moved;
   }
+  private lastProbe = [new THREE.Vector3(1e9, 0, 0), new THREE.Vector3(1e9, 0, 0)];
 
   /** Write bone world matrices (cross-fading from the previous mode while blendT < 1). */
   private commit(dt: number) {

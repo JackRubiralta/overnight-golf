@@ -22,18 +22,23 @@
 import * as THREE from 'three';
 import type { SwingPanelView } from '../../core/view';
 import { BACK_L, BACK_R, BONE_COUNT, Bone, DIM } from './body';
-import { CLUB_KINDS, HANDS_FROM_BUTT, type ClubInfo } from './clubs';
+import { CLUB_KINDS, type ClubInfo } from './clubs';
 
 // ---- tuning -------------------------------------------------------------------------------
 const BALL_R = 0.021335;
 /** Swing plane steepens to this angle above the address hand height (rad). */
 const TOP_PLANE = 70 * (Math.PI / 180);
 /** Arm extension at address as a fraction of full reach (lead nearly straight, trail softer). */
-const LEAD_REACH = 0.945;
-const TRAIL_REACH = 0.95;
+const LEAD_REACH = 0.94;
+const TRAIL_REACH = 0.975;
+/** The address/swing plane is this much flatter than the club's lie (hands a little low, as
+ *  real players set up; the toe rises by the same few degrees). */
+const ALPHA_FLATTEN = 5 * (Math.PI / 180);
 /** Club rotation (rad, from straight down in 2D) beyond which the 3D club over-rotates. */
 const OVER_START = 1.75;
-const OVER_GAIN = 1.5;
+const OVER_GAIN = 1.7;
+/** Max 3D club rotation (rad): a little past parallel at most. */
+const OVER_MAX = 4.85;
 /** How far the over-rotated club leans behind the golfer's head (unit-vector z). */
 const OVER_BEHIND = 0.4;
 /** Extra yaw (rad) of the hands/club about the body near the top and at the finish. */
@@ -53,7 +58,7 @@ const HIP_RATIO = 0.48;
 /** Stance width (ankle to ankle, m) per club. */
 const STANCE: Record<string, number> = { driver: 0.5, wood: 0.47, hybrid: 0.44, iron: 0.4, wedge: 0.35, putter: 0.3 };
 /** Extra forward ball position (m) relative to the body centre per club. */
-const BALL_FWD: Record<string, number> = { driver: 0.1, wood: 0.06, hybrid: 0.035, iron: 0.015, wedge: 0.0, putter: 0.04 };
+const BALL_FWD: Record<string, number> = { driver: 0.0, wood: 0.0, hybrid: 0.0, iron: 0.0, wedge: -0.01, putter: 0.0 };
 const STRIDE = 1.35; // m per gait cycle at walking speed
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -153,7 +158,7 @@ export class GolferRig {
     const sw = inp.swing;
     const club = inp.club;
     this.showClub(CLUB_KINDS.indexOf(club.kind));
-    const alpha = club.lie;
+    const alpha = club.lie - ALPHA_FLATTEN;
     const L3 = club.handLen;
     const cot = 1 / Math.tan(alpha);
     const cotTop = 1 / Math.tan(TOP_PLANE);
@@ -192,9 +197,9 @@ export class GolferRig {
 
     // --- posture at address: place the body so both arms reach the grip --------------------
     const kind = club.kind;
-    const tau0 = clamp(0.5 + (1.04 - L3) * 0.62, 0.48, 0.72); // spine tilt from vertical
-    const sigma0 = 0.12; // side bend (trail shoulder low)
-    const pelvisH = 0.9 - (1.04 - L3) * 0.07;
+    const tau0 = clamp(0.58 + (1.04 - L3) * 0.5, 0.55, 0.75); // spine tilt from vertical
+    const sigma0 = 0.08; // side bend (trail shoulder low)
+    const pelvisH = 0.89 - (1.04 - L3) * 0.07;
     const ha = map(sw.shoulder.x, sw.shoulder.y - sw.armLen, this.t[7]);
     const xc = map(sw.shoulder.x, 0, this.t[8]).x - (BALL_FWD[kind] ?? 0) + inp.stance * 0.03;
     const uA = this.t[9].set(0, Math.sin(alpha), -Math.cos(alpha));
@@ -228,7 +233,7 @@ export class GolferRig {
     // rotating in 3D toward parallel at the top / wrapped at the finish, behind the head.
     let phi3 = sw.phi;
     const over = Math.abs(phi3) - OVER_START;
-    if (over > 0) phi3 = Math.sign(phi3) * (OVER_START + over * OVER_GAIN);
+    if (over > 0) phi3 = Math.sign(phi3) * Math.min(OVER_MAX, OVER_START + over * OVER_GAIN);
     const dir = this.t[1].set(Math.sin(phi3) * k, -Math.cos(phi3) * k, Math.cos(phi3) * k * cot).normalize();
     dir.z -= OVER_BEHIND * smooth(Math.PI * 0.95, Math.PI * 1.4, Math.abs(phi3));
     dir.normalize();
@@ -284,7 +289,7 @@ export class GolferRig {
     const lift = 0.035 * thru - 0.01 * impactZone;
 
     // --- pelvis & chest -------------------------------------------------------------------
-    const P = this.t[13].set(xc + shiftX, pelvisH + lift + (this.footLift[0] + this.footLift[1]) * 0.5, pelvisZ0 + 0.03 * thru);
+    const P = this.t[13].set(xc + shiftX, pelvisH + lift + (this.footLift[0] + this.footLift[1]) * 0.3, pelvisZ0 + 0.03 * thru);
     const qP = this.q[0].setFromAxisAngle(AX_Y, psiH).multiply(this.q[2].setFromAxisAngle(AX_X, tauP));
     const qC = this.q[1].setFromAxisAngle(AX_X, tau).multiply(this.q[2].setFromAxisAngle(AX_Z, sigma)).multiply(this.q[3].setFromAxisAngle(AX_Y, psiS));
     const waist = this.t[14].set(0, DIM.waist, 0).applyQuaternion(qP).add(P);
@@ -516,4 +521,3 @@ export class GolferRig {
   }
 }
 
-export { HANDS_FROM_BUTT };

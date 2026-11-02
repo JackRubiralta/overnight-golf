@@ -14,6 +14,8 @@ import { SkySystem } from '../Sky';
 import { Terrain } from '../Terrain';
 import { Post } from '../Post';
 import { viewPreset } from '../views';
+import { createModules, enabledModules } from '../registry';
+import type { RenderModule } from '../shared';
 
 async function main() {
   const p = new URLSearchParams(location.search);
@@ -28,10 +30,18 @@ async function main() {
   const course = new Course(field, grids);
   const world = new World(document.getElementById('app')!);
   world.renderer.domElement.addEventListener('webglcontextlost', () => console.error('WebGL context lost'));
-  const sky = new SkySystem();
-  const mods = p.get('terrain') === '1' ? [sky, new Terrain()] : [sky];
-  const post = p.get('post') === '1' ? new Post() : null;
+  // &full=1 → every registered module (honours &only=), like the game; otherwise sky [+ terrain]
+  const full = p.get('full') === '1' ? createModules() : null;
+  const sky = full ? full.sky : new SkySystem();
+  let mods: RenderModule[] = p.get('terrain') === '1' ? [sky, new Terrain()] : [sky];
+  let post: Post | null = p.get('post') === '1' ? new Post() : null;
+  if (full) ({ list: mods, post } = enabledModules(full));
   await world.init(course, grids, mods, post);
+  if (full) {
+    full.props.setTreeColliders(full.foliage.colliders);
+    full.props.setActiveHole(0);
+    world.mode = 'stance';
+  }
   // per-effect overrides for A/B checks: &ao=0 &bloom=0 &smaa=0 &dof=40 (focus distance, m)
   if (post) {
     const flag = (k: 'ao' | 'bloom' | 'smaa') => (p.get(k) === null ? world.quality[k] : p.get(k) === '1');

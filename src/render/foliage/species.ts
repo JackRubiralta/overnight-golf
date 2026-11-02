@@ -57,7 +57,7 @@ export const SPECIES: SpeciesDef[] = [
       { children: 16, angle: 42, angleJitter: 12, start: 0.32, length: 4.6, lengthJitter: 0.25, lengthFalloff: 0.6, radius: 0.55, taper: 0.8, sections: 6, segments: 5, gnarl: 0.18, tropism: -0.035 },
       { children: 5, angle: 36, start: 0.2, length: 2.2, lengthJitter: 0.3, radius: 0.6, taper: 0.85, sections: 4, segments: 3, gnarl: 0.2, tropism: -0.07 },
     ],
-    leaves: { tile: 'birch', count: 5, size: 1.15, sizeJitter: 0.25, start: 0.15, angle: 25, orient: 'free', droop: 0.55, inner: 1, double: 0.5 },
+    leaves: { tile: 'birch', count: 7, size: 1.15, sizeJitter: 0.25, start: 0.15, angle: 25, orient: 'free', droop: 0.55, inner: 1, double: 0.5 },
   },
   {
     name: 'birchB',
@@ -76,7 +76,7 @@ export const SPECIES: SpeciesDef[] = [
       { children: 13, angle: 48, angleJitter: 12, start: 0.3, length: 4, lengthJitter: 0.25, lengthFalloff: 0.55, radius: 0.55, taper: 0.8, sections: 6, segments: 5, gnarl: 0.2, tropism: -0.03 },
       { children: 5, angle: 36, start: 0.2, length: 2, lengthJitter: 0.3, radius: 0.6, taper: 0.85, sections: 4, segments: 3, gnarl: 0.2, tropism: -0.07 },
     ],
-    leaves: { tile: 'birch', count: 5, size: 1.1, sizeJitter: 0.25, start: 0.15, angle: 25, orient: 'free', droop: 0.5, inner: 1, double: 0.5 },
+    leaves: { tile: 'birch', count: 7, size: 1.1, sizeJitter: 0.25, start: 0.15, angle: 25, orient: 'free', droop: 0.5, inner: 1, double: 0.5 },
   },
   // Scots pine: tall bare trunk, flat-topped clumpy crown.
   {
