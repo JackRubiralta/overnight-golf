@@ -10,8 +10,10 @@
  *    flowers …) are hidden; the flagged list is collected by a scene traversal every
  *    REFRESH_FRAMES frames, not per render,
  *  - the caller only renders when a water body is actually in view,
- *  - an optional screen rectangle (the water body's projected bounds) scissors the pass, so
- *    only the pixels the water can sample are shaded.
+ *  - optional world bounds of the water surface scissor the pass to their projection in the
+ *    reflection texture (plus a margin for the ripple distortion), so only the texels the water
+ *    can sample are shaded. Note the mirrored camera's image is flipped horizontally relative to
+ *    the screen, hence the projection through the virtual camera, not the view camera.
  */
 import * as THREE from 'three';
 
@@ -40,6 +42,8 @@ export class PlanarReflection {
   private clip = new THREE.Vector4();
   private q = new THREE.Vector4();
   private size = new THREE.Vector2();
+  private rect = new THREE.Vector4();
+  private corner = new THREE.Vector3();
   private hidden: THREE.Object3D[] = [];
   private flagged: THREE.Object3D[] = [];
   private flaggedAge = Infinity;
@@ -62,7 +66,7 @@ export class PlanarReflection {
    * Render the reflection of `scene` seen by `camera` in the plane y = level.
    * Returns false (and renders nothing) when the camera is below the plane.
    */
-  render(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, level: number, rect: THREE.Vector4 | null = null): boolean {
+  render(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, level: number, bounds: THREE.Box3 | null = null, margin = 0.04): boolean {
     this.planePos.set(camera.position.x, level, camera.position.z);
     this.camPos.setFromMatrixPosition(camera.matrixWorld);
     this.view.subVectors(this.planePos, this.camPos);
@@ -73,19 +77,6 @@ export class PlanarReflection {
     const w = Math.max(64, Math.round(this.size.x * this.scale));
     const h = Math.max(64, Math.round(this.size.y * this.scale));
     if (this.target.width !== w || this.target.height !== h) this.target.setSize(w, h);
-    // Scissor to the water's screen rectangle (x0, y0, x1, y1 in 0..1), when given.
-    if (rect) {
-      const x0 = Math.max(0, Math.floor(rect.x * w));
-      const y0 = Math.max(0, Math.floor(rect.y * h));
-      const x1 = Math.min(w, Math.ceil(rect.z * w));
-      const y1 = Math.min(h, Math.ceil(rect.w * h));
-      if (x1 <= x0 || y1 <= y0) return false;
-      this.target.scissor.set(x0, y0, x1 - x0, y1 - y0);
-      this.target.scissorTest = true;
-    } else {
-      this.target.scissorTest = false;
-    }
-
     // Mirror the camera position and its look target through the plane.
     this.view.reflect(this.normal).negate().add(this.planePos);
     this.rot.extractRotation(camera.matrixWorld);
@@ -101,6 +92,20 @@ export class PlanarReflection {
     vc.projectionMatrix.copy(camera.projectionMatrix);
     vc.projectionMatrixInverse.copy(camera.projectionMatrixInverse);
     vc.layers.mask = camera.layers.mask;
+
+    // Scissor to the projection of the water bounds in the reflection texture (0..1 uv).
+    const rect = bounds ? this.projectBounds(bounds, margin) : null;
+    if (rect) {
+      const x0 = Math.max(0, Math.floor(rect.x * w));
+      const y0 = Math.max(0, Math.floor(rect.y * h));
+      const x1 = Math.min(w, Math.ceil(rect.z * w));
+      const y1 = Math.min(h, Math.ceil(rect.w * h));
+      if (x1 <= x0 || y1 <= y0) return false;
+      this.target.scissor.set(x0, y0, x1 - x0, y1 - y0);
+      this.target.scissorTest = true;
+    } else {
+      this.target.scissorTest = false;
+    }
 
     this.textureMatrix.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
     this.textureMatrix.multiply(vc.projectionMatrix).multiply(vc.matrixWorldInverse);
@@ -147,6 +152,26 @@ export class PlanarReflection {
     renderer.xr.enabled = prevXr;
     for (const o of this.hidden) o.visible = true;
     return true;
+  }
+
+  /** Bounds → uv rectangle in the virtual camera's image, or null if they reach behind it. */
+  private projectBounds(b: THREE.Box3, margin: number): THREE.Vector4 | null {
+    const vc = this.camera;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let k = 0; k < 8; k++) {
+      const p = this.corner.set(k & 1 ? b.max.x : b.min.x, k & 2 ? b.max.y : b.min.y, k & 4 ? b.max.z : b.min.z);
+      p.applyMatrix4(vc.matrixWorldInverse);
+      if (p.z > -vc.near) return null;
+      p.applyMatrix4(vc.projectionMatrix);
+      x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x);
+      y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
+    }
+    return this.rect.set(
+      Math.max(0, x0 * 0.5 + 0.5 - margin),
+      Math.max(0, y0 * 0.5 + 0.5 - margin),
+      Math.min(1, x1 * 0.5 + 0.5 + margin),
+      Math.min(1, y1 * 0.5 + 0.5 + margin),
+    );
   }
 
   dispose() {
