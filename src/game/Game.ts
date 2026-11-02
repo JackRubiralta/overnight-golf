@@ -609,7 +609,6 @@ export class Game {
 
   private updateWalk(dt: number) {
     const inp = this.input;
-    if (inp.pressed('swingGrab') && !inp.pointerLocked) inp.requestPointerLock();
     const look = inp.consumeLookDelta();
     const ls = 0.0022 * settings.get('lookSensitivity') / this.rig.fovZoom;
     this.rig.yaw -= look.dx * ls;
@@ -663,7 +662,6 @@ export class Game {
   private updateFreecam(dt: number) {
     const inp = this.input;
     const look = inp.consumeLookDelta();
-    if (inp.pressed('swingGrab') && !inp.pointerLocked) inp.requestPointerLock();
     this.rig.yaw -= look.dx * 0.0022;
     this.rig.pitch = Math.max(-1.4, Math.min(1.4, this.rig.pitch - look.dy * 0.0022));
     const k = (a: Parameters<Input['held']>[0]) => (inp.held(a) ? 1 : 0);

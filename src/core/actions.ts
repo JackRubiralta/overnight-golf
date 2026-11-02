@@ -94,5 +94,5 @@ export const DEFAULT_PAD: PadBindings = {
 };
 
 /** Which bindings are context-sensitive (same key used in walking vs stance). */
-export const STANCE_ONLY: Action[] = ['faceClose', 'faceOpen', 'pathIn', 'pathOut', 'aimLeft', 'aimRight', 'stanceForward', 'stanceBack', 'resetFacePath', 'swingGrab', 'retake', 'practiceSwing', 'club1', 'club2', 'club3', 'club4', 'club5', 'clubNext', 'clubPrev', 'rangefinder'];
+export const STANCE_ONLY: Action[] = ['faceClose', 'faceOpen', 'pathIn', 'pathOut', 'aimLeft', 'aimRight', 'stanceForward', 'stanceBack', 'resetFacePath', 'swingGrab', 'retake', 'practiceSwing', 'club1', 'club2', 'club3', 'club4', 'club5', 'clubNext', 'clubPrev'];
 export const WALK_ONLY: Action[] = ['moveForward', 'moveBack', 'moveLeft', 'moveRight', 'run', 'crouch', 'jump', 'returnToBall'];

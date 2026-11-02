@@ -92,9 +92,12 @@ void main() {
   if (a < 0.003) discard;
   vec3 lit = vAdd > 0.5 ? col : col * vLight;
   lit = mix(lit, vAdd > 0.5 ? vec3(0.0) : uFogColor, vFog);
-  gl_FragColor = vec4(lit * a, a * (1.0 - vAdd));
+  // Tone map / encode the straight colour, then premultiply (keeps small alphas from glowing
+  // when the renderer tone maps per material, i.e. without the post pipeline).
+  gl_FragColor = vec4(lit, a);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
+  gl_FragColor = vec4(gl_FragColor.rgb * a, a * (1.0 - vAdd));
 }
 `;
 

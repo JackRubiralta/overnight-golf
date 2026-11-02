@@ -70,9 +70,10 @@ void main() {
   float a = mix(exp(-r2 * 4.0), exp(-r2 * 2.2) * (0.6 + 0.4 * exp(-r2 * 12.0)), vFluff) * vAlpha;
   if (a < 0.003) discard;
   vec3 col = vec3(1.0, 0.96, 0.86) * vLight;
-  gl_FragColor = vec4(col * a, a * 0.6);
+  gl_FragColor = vec4(col, a);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
+  gl_FragColor = vec4(gl_FragColor.rgb * a, a * 0.6);
 }
 `;
 

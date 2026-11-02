@@ -68,7 +68,7 @@ void main() {
     float centre = 1.0 - smoothstep(0.2, 0.55, d);
     float rim = smoothstep(0.4, 0.62, d) * (1.0 - smoothstep(0.65, 0.95, d));
     col = mix(vec3(0.42, 0.33, 0.21), vec3(0.85, 0.75, 0.56), rim);
-    a = max(centre * 0.55, rim * 0.45 * (0.6 + 0.4 * n));
+    a = max(centre * 0.5, rim * 0.3 * smoothstep(0.3, 0.7, n));
     a *= 1.0 - smoothstep(life * 0.5, life, age);
     col *= light;
   } else {

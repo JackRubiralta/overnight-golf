@@ -26,7 +26,7 @@ const MODE_BLEND = 0.3;
 /** Max terrain height difference applied to a foot (m). */
 const MAX_FOOT_LIFT = 0.25;
 /** Debug camera preset from the URL (visual checks only). */
-const DEBUG_CAM = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('golfercam') ?? '' : '';
+const DEBUG_CAM: string = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('golfercam') ?? '' : '';
 
 export interface GolferPose {
   /** Ball centre position (world). The ground under it is at ballPos.y - swing.ballY. */
@@ -102,24 +102,25 @@ export class Golfer implements RenderModule {
   update(ctx: FrameContext) {
     if (this.blendT < 1) this.commit(ctx.dt);
     this.trail.update(performance.now() / 1000);
-    if (DEBUG_CAM) this.debugCamera(ctx.camera);
+    if (DEBUG_CAM) this.debugCamera(ctx.camera, (window as unknown as { __golfercam?: string }).__golfercam ?? DEBUG_CAM);
   }
 
   /**
    * Debug close-up camera for visual checks: `?golfercam=behind|face|side|top` places the
    * camera relative to the golfer frame (only in the static viewer; ignored otherwise).
    */
-  private debugCamera(cam: THREE.PerspectiveCamera) {
+  private debugCamera(cam: THREE.PerspectiveCamera, name: string) {
     const presets: Record<string, [number, number, number, number]> = {
-      behind: [-4.2, 1.45, -0.55, 0.95], // down the line, behind the hands
-      face: [-0.45, 1.2, 3.6, 0.85], // face-on, across the ball
-      side: [3.2, 1.4, -1.6, 0.9], // from the target side
+      behind: [-2.9, 1.35, -0.75, 0.95], // down the line, behind the hands
+      face: [-0.3, 1.1, 2.4, 0.9], // face-on, across the ball
+      side: [2.6, 1.3, -1.4, 0.95], // from the target side
+      back: [-0.3, 1.5, -3.2, 1.0], // directly behind the golfer
       top: [-0.2, 4.5, -0.4, 0.4],
       club: [0.6, 0.35, 0.9, 0.05], // close on the clubhead at address
     };
-    const c = presets[DEBUG_CAM] ?? presets.behind;
-    const look = new THREE.Vector3(-0.15, c[3], -0.55);
-    if (DEBUG_CAM === 'club') look.set(-0.02, 0.03, 0);
+    const c = presets[name] ?? presets.behind;
+    const look = new THREE.Vector3(-0.2, c[3], -0.6);
+    if (name === 'club') look.set(-0.02, 0.03, 0);
     cam.position.set(c[0], c[1], c[2]).applyMatrix4(this.frame);
     cam.lookAt(look.applyMatrix4(this.frame));
   }

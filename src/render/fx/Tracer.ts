@@ -68,7 +68,7 @@ void main() {
   vec3 hot = mix(uColor, vec3(1.0), 0.55);
   vec3 col = (uColor * glow * 1.1 + hot * core * 1.1) * shimmer + vec3(1.0, 0.97, 0.92) * core * 2.5 * head;
   float a = uAlpha * launch * (1.0 - 0.85 * fxFog(vDist));
-  gl_FragColor = vec4(col * ${INTENSITY.toFixed(2)} * a, 1.0);
+  gl_FragColor = vec4(col * ${INTENSITY.toFixed(2)}, clamp(a, 0.0, 1.0)); // additive: src * alpha
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }

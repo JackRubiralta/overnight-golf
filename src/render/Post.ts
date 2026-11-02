@@ -32,7 +32,7 @@ import { GradeEffect } from './post/GradeEffect';
 import { patchN8AO } from './post/n8aoCompat';
 
 // ---- tuning -------------------------------------------------------------------------------
-const BLOOM = { threshold: 1.6, smoothing: 0.5, intensity: 0.42, radius: 0.72, levels: 7 };
+const BLOOM = { threshold: 3.0, smoothing: 1.2, intensity: 0.55, radius: 0.62, levels: 5 }; // HDR threshold: only sun, glints, hot cloud rims
 const AO = { radius: 1.6, falloff: 1.0, intensity: 2.2 };
 const DOF = { bokehScale: 3.0, rangeFraction: 0.35, minRange: 1.5 };
 
