@@ -62,3 +62,8 @@ Decisions made autonomously during the overnight build, with the reasoning. Newe
 ## Game flow
 
 - After a long shot you are put in first-person walking mode where you hit from, as in the original. **F** goes straight to your ball. This is an improvement for pace; research found walking can feel like padding. Short shots and shots onto the green auto-address the ball.
+
+## User feedback (overnight)
+
+- **Swing panel mirrored and enlarged**: the target is on the right. Drag up-left, then swiftly down-right. The swing panel is 28 em and the club panel 24×27 em.
+- **Face/path drift**: an unstable "runaway" drift, where A/D and Q/E accelerate away from square during the swing, was tried and **rejected by the user**. The original gentle, bounded wobble is kept and must not be changed back to runaway behaviour.

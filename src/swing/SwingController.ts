@@ -137,7 +137,11 @@ export class SwingController {
     return a === 'off' ? 1 : a === 'light' ? 0.45 : 0;
   }
 
-  /** Smooth, visible drift (sum of sines + seeded phase), only while swinging. */
+  /**
+   * Smooth, visible drift (sum of sines + seeded phase), only while swinging.
+   * USER DECISION (2026-11-02): keep this gentle bounded wobble. A "runaway"/unstable drift that
+   * accelerates away from square was tried and explicitly rejected by the user — do not reintroduce it.
+   */
   private updateDrift(dt: number) {
     const k = this.assistScale();
     if (!this.active || k === 0) {
