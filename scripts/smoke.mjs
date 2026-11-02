@@ -3,8 +3,10 @@ import { chromium } from './pw.mjs';
 const port = process.argv[2] || '5173';
 const out = process.argv[3] || 'screenshots/_tmp/smoke.png';
 const query = process.argv[4] || '?play=0';
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-gpu-watchdog'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+// Block Vite's HMR socket so edits by other processes don't reload the page mid-test.
+await page.routeWebSocket(/.*/, () => {});
 const errors = [];
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()}`); });
 page.on('pageerror', (e) => errors.push(`[pageerror] ${e.stack || e}`));

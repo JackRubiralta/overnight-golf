@@ -101,6 +101,8 @@ async function main() {
     world.frame(1 / 60);
     if (++frames === 4) window.__ready = true;
     if (frames < maxFrames) requestAnimationFrame(loop);
+    // Capture the canvas in the same task as the render (works without preserveDrawingBuffer).
+    else (window as unknown as { __shot?: string }).__shot = world.renderer.domElement.toDataURL('image/png');
   };
   loop();
 }

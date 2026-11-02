@@ -9,6 +9,26 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
+/**
+ * Untextured surfaces share ONE material ('paint') and carry their roughness/metalness per vertex
+ * (attribute `pbr`), so painted wood, gloss paint, metal, iron, cloth, rubber and terracotta merge
+ * into a single draw call per cluster. Keys not listed here keep their own material.
+ */
+export const PBR_PRESETS: Record<string, [number, number]> = {
+  paint: [0.58, 0],
+  gloss: [0.3, 0],
+  metal: [0.36, 0.9],
+  iron: [0.55, 0.6],
+  cloth: [0.95, 0],
+  rubber: [0.9, 0],
+  terracotta: [0.86, 0],
+};
+
+/** Material key a part is merged under (preset keys collapse into 'paint'). */
+export function canonicalKey(key: string) {
+  return key in PBR_PRESETS ? 'paint' : key;
+}
+
 /** Box with UVs in metres (so tiling textures keep a constant texel density). */
 export function boxGeo(w: number, h: number, d: number): THREE.BufferGeometry {
   const g = new THREE.BoxGeometry(w, h, d);
@@ -94,6 +114,7 @@ export class GeoBucket {
   add(matKey: string, g: THREE.BufferGeometry, m: THREE.Matrix4 | null, color: THREE.ColorRepresentation) {
     ensureIndexed(g);
     for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv') g.deleteAttribute(name);
+    g.morphAttributes = {};
     if (!g.getAttribute('uv')) {
       const n = g.getAttribute('position').count;
       g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
@@ -111,9 +132,17 @@ export class GeoBucket {
       col[i * 3 + 2] = c.b;
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const pbr = PBR_PRESETS[matKey] ?? [1, 1];
+    const rm = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++) {
+      rm[i * 2] = pbr[0];
+      rm[i * 2 + 1] = pbr[1];
+    }
+    g.setAttribute('pbr', new THREE.BufferAttribute(rm, 2));
     g.clearGroups();
-    let list = this.parts.get(matKey);
-    if (!list) this.parts.set(matKey, (list = []));
+    const key = canonicalKey(matKey);
+    let list = this.parts.get(key);
+    if (!list) this.parts.set(key, (list = []));
     list.push(g);
   }
 
@@ -156,9 +185,10 @@ export class GeoBucket {
 
   /** Merge one material's parts into a raw geometry (for InstancedMesh templates). */
   takeGeometry(matKey: string): THREE.BufferGeometry | null {
-    const list = this.parts.get(matKey);
+    const key = canonicalKey(matKey);
+    const list = this.parts.get(key);
     if (!list) return null;
-    this.parts.delete(matKey);
+    this.parts.delete(key);
     const merged = mergeGeometries(list, false);
     for (const g of list) g.dispose();
     return merged;

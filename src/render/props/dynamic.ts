@@ -29,7 +29,7 @@ type RBody = RAPIER_NS.RigidBody;
 /** Tunables */
 const STEP = 1 / 60;
 const MAX_STEPS = 3;
-const IMPULSE_GAIN = 2.6; // game-feel boost on ball → prop impulses
+const IMPULSE_GAIN = 4; // game-feel boost on ball → prop impulses
 const POT_BREAK_IMPULSE = 0.45; // N·s from the ball
 const POT_BREAK_FORCE = 260; // N contact force (falls, collisions)
 const SHARD_SLICES = 4;
@@ -153,7 +153,7 @@ function multiGeo(b: GeoBucket, keys: string[], mats: PropMaterials) {
     start += c;
   }
   // Manual merge (attributes identical across buckets: position, normal, uv, color).
-  const names = ['position', 'normal', 'uv', 'color'];
+  const names = ['position', 'normal', 'uv', 'color', 'pbr'];
   const out = new THREE.BufferGeometry();
   for (const n of names) {
     const size = geos[0].getAttribute(n).itemSize;
@@ -231,7 +231,7 @@ export class DynamicProps {
       const pts = POT_PROFILE.map(([r, y]) => new THREE.Vector2(r, y - POT_H / 2));
       b.add('terracotta', new THREE.LatheGeometry(pts, 18), null, '#b8643a');
       b.add('terracotta', new THREE.TorusGeometry(0.137, 0.012, 6, 18), mat(0, POT_H / 2 - 0.012, 0, Math.PI / 2), '#a5552f');
-      this.addVisual('pot', multiGeo(b, ['terracotta'], M));
+      this.addVisual('pot', multiGeo(b, ['paint'], M));
       this.buildShardGeometries();
     }
     // Gong disc (faces local +z) with its hanging cords; origin at the disc centre.
@@ -244,7 +244,7 @@ export class DynamicProps {
       b.add('brass', new THREE.TorusGeometry(0.6, 0.025, 8, 40), null, '#d6a24a');
       b.add('brass', new THREE.SphereGeometry(0.11, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(0, 0, 0.015, Math.PI / 2), '#f0c66a');
       for (const sx of [-0.28, 0.28]) b.cyl('cloth', 0.012, 0.012, 0.42, mat(sx, 0.72, 0, 0, 0, -sx * 0.25), '#b02a2a', 6);
-      this.addVisual('gong', multiGeo(b, ['brass', 'cloth'], M));
+      this.addVisual('gong', multiGeo(b, ['brass', 'paint'], M));
     }
     // Target boss: straw drum with painted faces; origin at the centre, faces local ±z.
     {
@@ -257,7 +257,7 @@ export class DynamicProps {
       b.add('target', new THREE.CircleGeometry(0.62, 40), mat(0, 0, -0.1, 0, Math.PI), '#ffffff');
       // Hanging straps
       for (const sx of [-0.35, 0.35]) b.box('cloth', 0.05, 0.5, 0.02, mat(sx, 0.75, 0.02), '#3a2a1a');
-      this.addVisual('target', multiGeo(b, ['hay', 'target', 'cloth'], M));
+      this.addVisual('target', multiGeo(b, ['hay', 'target', 'paint'], M));
     }
     // Scarecrow (origin at the foot of the post).
     {
@@ -282,14 +282,14 @@ export class DynamicProps {
       // Face: button eyes and stitched smile
       for (const sx of [-0.06, 0.06]) b.add('rubber', new THREE.SphereGeometry(0.025, 8, 6), mat(sx, 2.02, 0.175), '#1a1a1a');
       b.box('rubber', 0.12, 0.015, 0.01, mat(0, 1.92, 0.185), '#2a1a10');
-      this.addVisual('scarecrow', multiGeo(b, ['wood', 'cloth', 'hay', 'rubber'], M));
+      this.addVisual('scarecrow', multiGeo(b, ['wood', 'paint', 'hay'], M));
     }
     // Square hay bale.
     {
       const b = new GeoBucket();
       b.box('hay', 0.95, 0.4, 0.48, null, '#e0c070');
       for (const x of [-0.25, 0.25]) b.box('cloth', 0.025, 0.405, 0.485, mat(x, 0, 0), '#6a4a2a');
-      this.addVisual('bale', multiGeo(b, ['hay', 'cloth'], M));
+      this.addVisual('bale', multiGeo(b, ['hay', 'paint'], M));
     }
   }
 
@@ -484,7 +484,7 @@ export class DynamicProps {
         const lx = (i - (count - 1) / 2) * s;
         const y = ly + CRATE / 2 + r * (CRATE + 0.002) + 0.002;
         const yawJ = (this.rand() - 0.5) * 0.08;
-        const p = this.newProp(`crate${si}-${n++}`, 'crate', f.world(lx, y, 0), f.rot(0, yawJ, 0), 4, si);
+        const p = this.newProp(`crate${si}-${n++}`, 'crate', f.world(lx, y, 0), f.rot(0, yawJ, 0), 2.5, si);
         this.addPart(p, 'box', { half: new THREE.Vector3(CRATE / 2, CRATE / 2, CRATE / 2) }, new THREE.Vector3(), new THREE.Quaternion(), 0.35, 0.5);
       }
     }

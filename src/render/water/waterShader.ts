@@ -29,6 +29,8 @@ export const WATER_TUNING = {
   /** Depth (m) over which the shoreline fades in, and foam band width. */
   shoreFade: 0.1,
   foamBand: 0.45,
+  /** Max HDR radiance written (keeps the sun glint finite for HalfFloat targets / bloom). */
+  maxRadiance: 48,
 };
 
 const T = WATER_TUNING;
@@ -159,6 +161,7 @@ export const WATER_OUTPUT = /* glsl */ `
 float wNoV = clamp(dot(normal, geometryViewDir), 0.0, 1.0);
 float wF = 0.02 + 0.98 * pow(1.0 - wNoV, 5.0);
 float wA = clamp(wOpacity + (1.0 - wOpacity) * wF, 0.0, 1.0);
-vec3 wPremult = totalDiffuse * wOpacity + totalSpecular;
+// Clamp: a near-mirror GGX sun glint can exceed the HalfFloat range (→ Inf → NaN blocks in bloom).
+vec3 wPremult = min(totalDiffuse * wOpacity + totalSpecular, vec3(${f(T.maxRadiance)}));
 gl_FragColor = vec4(wPremult / max(wA, 1e-3), max(wA, 1e-3));
 `;

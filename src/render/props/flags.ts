@@ -252,7 +252,9 @@ export class FlagSet {
         flag.customDepthMaterial = fm.depth;
         flag.castShadow = true;
         flag.receiveShadow = true;
-        flag.frustumCulled = false;
+        // Bounds padded for the vertex-shader wave/droop so culling stays safe.
+        fg.computeBoundingSphere();
+        fg.boundingSphere!.radius += 0.3;
         flag.name = 'flag';
         if (spec.short) flag.scale.setScalar(0.55);
         g.add(flag);

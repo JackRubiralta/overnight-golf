@@ -37,18 +37,24 @@ export function createPropMaterials(): { mats: PropMaterials; tex: PropTextures;
   const signs = signAtlas();
 
   const std = (p: THREE.MeshStandardMaterialParameters) => new THREE.MeshStandardMaterial({ vertexColors: true, ...p });
+  // 'paint' reads roughness/metalness from the per-vertex `pbr` attribute (see builder.PBR_PRESETS).
+  const paint = std({ map: grime, roughness: 1, metalness: 1 });
+  paint.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec2 pbr;\nvarying vec2 vPbr;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPbr = pbr;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vPbr;')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor *= vPbr.x;')
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor *= vPbr.y;');
+  };
+  paint.customProgramCacheKey = () => 'thornbury-props-paint-v1';
   const mats = {
-    paint: std({ map: grime, roughness: 0.58, metalness: 0 }),
-    gloss: std({ map: grime, roughness: 0.3, metalness: 0 }),
+    paint,
     wood: std({ map: wood, roughness: 0.82, metalness: 0 }),
-    metal: std({ roughness: 0.36, metalness: 0.9 }),
-    iron: std({ map: grime, roughness: 0.55, metalness: 0.6 }),
-    rubber: std({ roughness: 0.92, metalness: 0 }),
     stone: std({ map: stone.map, bumpMap: stone.bump, bumpScale: 2.5, roughness: 0.92, metalness: 0 }),
     roof: std({ map: slate, roughness: 0.62, metalness: 0.05 }),
     hay: std({ map: straw, roughness: 0.95, metalness: 0 }),
-    cloth: std({ map: grime, roughness: 0.96, metalness: 0 }),
-    terracotta: std({ map: grime, roughness: 0.86, metalness: 0 }),
     terracottaDS: std({ map: grime, roughness: 0.86, metalness: 0, side: THREE.DoubleSide }),
     crate: std({ map: crate, roughness: 0.8, metalness: 0 }),
     target: std({ map: target, roughness: 0.85, metalness: 0 }),
