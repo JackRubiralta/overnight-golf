@@ -170,6 +170,9 @@ export class Game {
     (this.mods.effects as { clearAll?: () => void }).clearAll?.() ?? this.mods.effects.clearTracers();
     this.wind.reroll();
     this.history = [];
+    this.settleTime = 0;
+    this.holedTime = 0;
+    this.shot = null;
     // Tee the ball up at the front-centre of the tee box.
     const t = this.field().holes[i];
     const tee = new THREE.Vector3(h.tee[0] + t.teeDir[0] * 3, 0, h.tee[1] + t.teeDir[1] * 3);
@@ -475,6 +478,9 @@ export class Game {
     this.sim.pos.copy(this.ball);
     this.sim.launch(velocity, spin);
     this.mode = 'flight';
+    // Fresh settle clock for this shot (a holed / picked-up previous shot can leave it non-zero,
+    // which used to skip onBallStopped for the first shot of the next hole).
+    this.settleTime = 0;
     // Keep the mouse captured (it already is from the swing) so it can look around in flight.
     this.rig.startFlight();
     // Mouse-look during flight (walk context = look deltas, pointer lock, F fast-forward, W/S zoom).

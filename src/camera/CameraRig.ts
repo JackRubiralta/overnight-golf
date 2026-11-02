@@ -71,8 +71,11 @@ export class CameraRig {
     // Putting: straight down the line (the golfer stands left of it, out of the way).
     this.targetPos.copy(ball).addScaledVector(aimDir, -back).addScaledVector(right, putting ? 0.05 : -0.55).addScaledVector(UP, up);
     const g = this.camGround(this.targetPos.x, this.targetPos.z) + 0.6;
-    if (this.targetPos.y < g) this.targetPos.y = g;
-    this.targetLook.copy(ball).addScaledVector(aimDir, putting ? 6 : 12).addScaledVector(UP, putting ? -0.3 : 0);
+    // On a bank the camera has to rise above its nominal height: raise the look point by the
+    // same amount so the ball keeps its place on screen (instead of sinking under the HUD).
+    const lift = Math.max(0, g - this.targetPos.y);
+    this.targetPos.y += lift;
+    this.targetLook.copy(ball).addScaledVector(aimDir, putting ? 6 : 12).addScaledVector(UP, (putting ? -0.3 : 0) + lift);
     damp(this.pos, this.targetPos, 6, dt);
     damp(this.look, this.targetLook, 6, dt);
     this.apply(dt);

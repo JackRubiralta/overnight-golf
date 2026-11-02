@@ -129,6 +129,7 @@ const playStroke = async (opts, { fast = true, shots = {} } = {}) => {
   await frames(3);
   const after = await st();
   const rep = after.report;
+  if (!opts.practice && !opts.whiff) check(`stroke produced a new shot report`, !!rep && JSON.stringify(rep) !== JSON.stringify(before.report), rep ? rep.result : 'none');
   if (rep) log(`→ ${rep.quality} ${fmt(rep.clubSpeedMph)} mph, launch ${fmt(rep.launchV)}°, spin ${fmt(rep.spinRpm, 0)}, carry ${fmt(rep.carry)} m, total ${fmt(rep.total)} m, offline ${fmt(rep.offline)} m, apex ${fmt(rep.apex)} m, result ${rep.result}`);
   log(`   now: mode ${after.mode}, strokes ${after.strokes}, lie ${after.lie}, ${fmt(after.dist)} m to pin; transitions: ${await drainTransitions()}`);
   return { before, after, rep, restCam, r };
@@ -220,6 +221,9 @@ for (const [hi, hole] of holes.entries()) {
       await frames(3);
       const s1 = await st();
       await tap('Space');
+      const sArm = await st();
+      check('Space once only arms the retake (no penalty yet)', sArm.strokes === s1.strokes, `strokes ${s1.strokes}→${sArm.strokes}`);
+      await tap('Space');
       const s2 = await st();
       check('Space retake: back to the previous spot, +1', s2.strokes === s1.strokes + 1 && Math.hypot(s2.ball.x - tee.ball.x, s2.ball.z - tee.ball.z) < 0.5, `strokes ${s1.strokes}→${s2.strokes}, ${fmt(Math.hypot(s2.ball.x - tee.ball.x, s2.ball.z - tee.ball.z))} m from tee, lie ${s2.lie}`);
     }
@@ -228,10 +232,45 @@ for (const [hi, hole] of holes.entries()) {
   // ── Play the hole out ──
   let n = 0;
   let sawWalk = false;
+  let walkTested = false;
   let sawGreen = false;
   while (n++ < 20) {
     s = await st();
     if (s.mode === 'holed') break;
+    if (s.mode === 'stance' && s.strokes > 0 && !walkTested && Math.hypot(s.ball.x - tee.ball.x, s.ball.z - tee.ball.z) > 60) {
+      // After a long shot the game goes straight to the ball (Golf first); walking is on Tab.
+      walkTested = true;
+      check('after a long shot you are at your ball, addressing it', Math.hypot(s.player.x - s.ball.x, s.player.z - s.ball.z) < 3, `mode ${s.mode}`);
+      await tap('Tab');
+      const w = await st();
+      check('Tab from address → walking', w.mode === 'walk', w.mode);
+      // Walk away from the ball (hold S + Shift), then Tab must refuse and F must bring us back.
+      await page.keyboard.down('ShiftLeft');
+      await page.keyboard.down('KeyS');
+      for (let k = 0; k < 40; k++) {
+        await frames(1);
+        const p = await st();
+        if (Math.hypot(p.player.x - p.ball.x, p.player.z - p.ball.z) > 6) break;
+      }
+      await page.keyboard.up('KeyS');
+      await page.keyboard.up('ShiftLeft');
+      await frames(2);
+      const far = await st();
+      const fd = Math.hypot(far.player.x - far.ball.x, far.player.z - far.ball.z);
+      await tap('Tab');
+      const t = await st();
+      check('walking works and Tab far from the ball stays in walk mode', fd > 3 && t.mode === 'walk', `${fmt(fd)} m from ball, mode ${t.mode}; hint: ${t.hint}`);
+      await capture(`h${hole + 1}-walk`);
+      await tap('KeyF');
+      const f = await st();
+      check('F goes to the ball and addresses it', f.mode === 'stance' && Math.hypot(f.player.x - f.ball.x, f.player.z - f.ball.z) < 3, `${f.mode}`);
+      await tap('Tab');
+      const w2 = await st();
+      await tap('Tab');
+      const a2 = await st();
+      check('Tab walk ⇄ address next to the ball', w2.mode === 'walk' && a2.mode === 'stance', `${w2.mode} → ${a2.mode}`);
+      s = await st();
+    }
     if (s.mode === 'walk') {
       sawWalk = true;
       const far = Math.hypot(s.player.x - s.ball.x, s.player.z - s.ball.z);
@@ -283,7 +322,7 @@ for (const [hi, hole] of holes.entries()) {
   }
   s = await st();
   check(`hole ${hole + 1} holed out`, s.mode === 'holed', `mode ${s.mode} strokes ${s.strokes}`);
-  if (hi === 0) check('walk mode after the long tee shot', sawWalk);
+  if (hi === 0) check('walk flow exercised after the long tee shot', walkTested || sawWalk);
   await frames(6);
   await capture(`h${hole + 1}-holed`);
   // Scorecard appears, then Tab → next hole.
