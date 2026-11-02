@@ -4,7 +4,7 @@ export default defineConfig({
   base: './',
   build: {
     target: 'es2022',
-    chunkSizeWarningLimit: 4000,
+    chunkSizeWarningLimit: 5000,
     assetsInlineLimit: 0,
   },
   worker: { format: 'es' },

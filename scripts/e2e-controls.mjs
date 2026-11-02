@@ -145,16 +145,17 @@ if (started) {
   await capture('screenshots/_tmp/e2e-flight.png');
   // Wait for the ball to stop (fast-forward with F held).
   await page.keyboard.down('KeyF');
-  for (let i = 0; i < 160; i++) {
+  // Up to ~1500 rendered frames (fast-forward is active), however slow the frames are.
+  for (let i = 0; i < 300; i++) {
     s = await g();
     if (s.report) break;
-    await page.waitForTimeout(250);
+    await frames(5);
   }
   await page.keyboard.up('KeyF');
   const r = s.report;
   check('shot produces a shot report', !!r, r ? `${r.club} ${r.clubSpeedMph.toFixed(0)} mph, ${r.quality}, carry ${(r.carry / 0.9144).toFixed(0)} yd, total ${(r.total / 0.9144).toFixed(0)} yd, offline ${(r.offline / 0.9144).toFixed(1)} yd, result ${r.result}` : 'none');
   check('stroke counted', s.strokes >= 1, `strokes=${s.strokes}`);
-  await page.waitForTimeout(2500);
+  await frames(20);
   await capture('screenshots/_tmp/e2e-after.png');
 }
 const uniq = [...new Set(errors)];
