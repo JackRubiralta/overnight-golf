@@ -34,3 +34,11 @@ describe('course field', () => {
     console.log('tee/green heights', heights.join(' '));
   });
 });
+
+describe('practice green', () => {
+  it('is a green surface', async () => {
+    const { LANDMARKS } = await import('../src/course/layout');
+    const f = new CourseField();
+    expect(f.surface(LANDMARKS.practiceGreen.c[0], LANDMARKS.practiceGreen.c[1])).toBe('green');
+  });
+});

@@ -9,6 +9,7 @@
  */
 import type { Course } from '../../course/Course';
 import { HOLES, LANDMARKS, type P2 } from '../../course/layout';
+import { PROP_SITES } from '../../props/sites';
 import { Rng, hash2 } from './rng';
 import { SPECIES_INDEX } from './species';
 
@@ -99,11 +100,19 @@ function playLineDist(x: number, z: number, corridor: number) {
   return d;
 }
 
-function landmarkClear(x: number, z: number, pad: number) {
+/** Prop-site clearance (m from the site centre: ~6 m item spread + 10 m clear). */
+const SITE_CLEAR = 16;
+
+/**
+ * Clubhouse (≥ 35 m), practice green (≥ 10 m beyond its edge) and, unless `sites` is false
+ * (flowers), every hittable prop site in src/props/sites.ts.
+ */
+function landmarkClear(x: number, z: number, pad: number, sites = true) {
   const c = LANDMARKS.clubhouse.c;
-  if (Math.hypot(x - c[0], z - c[1]) < 48 + pad) return false;
+  if (Math.hypot(x - c[0], z - c[1]) < Math.max(38, 48 + pad)) return false;
   const p = LANDMARKS.practiceGreen.c;
-  if (Math.hypot(x - p[0], z - p[1]) < 22 + pad) return false;
+  if (Math.hypot(x - p[0], z - p[1]) < Math.max(LANDMARKS.practiceGreen.r[0] + 10, 22 + pad)) return false;
+  if (sites) for (const st of PROP_SITES) if (Math.hypot(x - st.x, z - st.z) < SITE_CLEAR) return false;
   return true;
 }
 
@@ -242,6 +251,7 @@ export function placeFoliage(course: Course, seed = 2024): PlacementResult {
       for (let k = 0; k < n; k++) {
         const ox = x + (k ? rng.sym(4) : 0);
         const oz = z + (k ? rng.sym(4) : 0);
+        if (k && !landmarkClear(ox, oz, 0)) continue;
         const scale = (k ? rng.range(0.25, 0.7) : rng.range(0.5, 1.6)) * (1 + rim * 0.8);
         const r = rng.next();
         rocks.push({ x: ox, z: oz, y: course.height(ox, oz) - 0.18 * scale, yaw: rng.next() * Math.PI * 2, scale, variant: Math.floor(rng.next() * 3), r, rank: corr < IN_PLAY ? r * 0.01 : 0.01 + r });
@@ -263,7 +273,7 @@ export function placeFoliage(course: Course, seed = 2024): PlacementResult {
       const dens = g.density(x, z);
       if (roll > (drift - 0.55) * 2.2 * (1 - dens)) continue;
       if (!baseClear(x, z, 14, 2, 1.5)) continue;
-      if (!landmarkClear(x, z, -15)) continue;
+      if (!landmarkClear(x, z, -15, false)) continue;
       if (playLineDist(x, z, corr) < PLAYLINE_FLOWER) continue;
       const r = rng.next();
       flowers.push({ x, z, y: course.height(x, z), yaw: rng.next() * Math.PI * 2, scale: rng.range(0.8, 1.25), variant: vnoise(x / 120, z / 120, 52) > 0.5 ? 1 : 0, r, rank: r });

@@ -107,7 +107,11 @@ export class Game {
     (mods.golfer as { setTrail?: (on: boolean) => void }).setTrail?.(true);
     mods.props.onPropHit = (e) => {
       this.audio.propHit(e.kind, e.speed);
-      if (e.kind === 'gong' || e.kind === 'target') this.ui.toast(e.kind === 'gong' ? 'GONG!' : 'Target hit!', 'good');
+      const ev = e as typeof e & { score?: number; broken?: boolean };
+      if (e.kind === 'gong') this.ui.toast('GONG!', 'good');
+      else if (e.kind === 'target') this.ui.toast(ev.score === 10 ? 'Bullseye! 10' : `Target hit — ${ev.score ?? 0}`, ev.score && ev.score >= 8 ? 'big' : 'good');
+      else if (ev.broken) this.ui.toast('Smashed!', 'good');
+      else if (e.kind === 'flagstick' && e.speed > 2) this.ui.toast('Off the flagstick!', 'info');
     };
     const unlock = () => this.audio.unlock();
     window.addEventListener('pointerdown', unlock);

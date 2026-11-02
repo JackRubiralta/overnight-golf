@@ -81,6 +81,7 @@ export class CourseField {
   private n = new Simplex2(1337);
   private n2 = new Simplex2(4242);
   holes: HoleCache[] = [];
+  private practiceH: number | null = null;
 
   constructor() {
     for (const def of HOLES) {
@@ -282,6 +283,18 @@ export class CourseField {
         if (d < 0) h = Math.min(h, waterLevel - 0.25 - 1.6 * smoothstep(0, 9, -d));
         else h = Math.min(h, lerp(waterLevel + 0.05, h, smoothstep(0, 10, d)));
       }
+    }
+    // Practice green by the clubhouse: a gently tilted putting surface.
+    const pg = LANDMARKS.practiceGreen;
+    const pdx = x - pg.c[0];
+    const pdz = z - pg.c[1];
+    if (pdx * pdx + pdz * pdz < 30 * 30) {
+      const gd = sdEllipse(x, z, { c: pg.c, r: pg.r }) + 0.4 * this.n2.noise(x / 9, z / 9);
+      out.green = Math.min(out.green, gd);
+      out.corridor = Math.min(out.corridor, gd);
+      if (this.practiceH === null) this.practiceH = this.corridorHeight(pg.c[0], pg.c[1]) + 0.3;
+      const plane = this.practiceH + 0.006 * pdx - 0.008 * pdz + 0.06 * this.n.fbm(x / 10, z / 10, 2);
+      h = lerp(h, plane, 1 - smoothstep(-1, 9, gd));
     }
     // Cart paths (slightly flattened, no holes needed).
     out.path = this.pathSdf(x, z);
