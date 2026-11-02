@@ -193,7 +193,7 @@ for (const [hi, hole] of holes.entries()) {
 
   const tee = await st();
   // Water hole: deliberately find a shot that finds the water first.
-  if (hi > 0) {
+  if ([1, 2, 6, 8].includes(hole)) {
     const w = await page.evaluate(() => {
       const g = window.__game;
       for (const club of [3, 2])

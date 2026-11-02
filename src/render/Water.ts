@@ -68,7 +68,7 @@ export interface WaterBody {
 }
 
 /** Max surface sample points per body for the line-of-sight test. */
-const VIS_SAMPLES = 40;
+const VIS_SAMPLES = 96;
 /** Ray-march step (m) of the terrain line-of-sight test. */
 const VIS_STEP = 2.5;
 /** Margin (fraction of the screen) around the water's projected bounds for the reflection

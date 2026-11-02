@@ -87,7 +87,7 @@ export class Props implements RenderModule, CollisionWorld {
   /** Course-independent work while the course bakes (perf): procedural textures + Rapier WASM. */
   prepare() {
     this.prepared ??= createPropMaterials();
-    preloadRapier();
+    preloadRapier().catch(() => {}); // a failure is reported by initPhysics()
   }
 
   init(ctx: InitContext) {
