@@ -79,16 +79,49 @@ export function syntheticImpact(d: ClubDelivery, whiff = false): SwingImpact {
 }
 
 /**
- * Bisection on a monotonic(ish) distance(speed) function: the speed in [lo, hi] whose distance
- * is closest to `target`.
+ * The speed in [lo, hi] whose distance is closest to `target`. `distance` need not be monotonic
+ * (balls can run back down a bank) and may return NaN for unusable results (water / OOB):
+ * a coarse scan picks the best bracket, then bisection (or a local ternary search) refines it.
  */
-export function solveSpeed(distance: (mph: number) => number, target: number, lo = 1, hi = 130, iters = 22): number {
-  if (distance(hi) <= target) return hi;
-  if (distance(lo) >= target) return lo;
-  for (let i = 0; i < iters; i++) {
-    const mid = 0.5 * (lo + hi);
-    if (distance(mid) < target) lo = mid;
-    else hi = mid;
+export function solveSpeed(distance: (mph: number) => number, target: number, lo = 1, hi = 130, samples = 40): number {
+  const xs: number[] = [];
+  const ds: number[] = [];
+  for (let i = 0; i <= samples; i++) {
+    const x = lo + ((hi - lo) * i) / samples;
+    xs.push(x);
+    ds.push(distance(x));
   }
-  return 0.5 * (lo + hi);
+  const err = (d: number) => (Number.isFinite(d) ? Math.abs(d - target) : Infinity);
+  let best = 0;
+  for (let i = 1; i <= samples; i++) if (err(ds[i]) < err(ds[best])) best = i;
+  if (!Number.isFinite(ds[best])) return lo;
+  // Prefer a bracket [i, i+1] around the best sample that crosses the target.
+  for (const i of [best - 1, best]) {
+    if (i < 0 || i >= samples) continue;
+    const a = ds[i];
+    const b = ds[i + 1];
+    if (!Number.isFinite(a) || !Number.isFinite(b) || (a - target) * (b - target) > 0) continue;
+    let x0 = xs[i];
+    let x1 = xs[i + 1];
+    const rising = b >= a;
+    for (let k = 0; k < 18; k++) {
+      const m = 0.5 * (x0 + x1);
+      const dm = distance(m);
+      if (!Number.isFinite(dm)) break;
+      if (dm < target === rising) x0 = m;
+      else x1 = m;
+    }
+    return 0.5 * (x0 + x1);
+  }
+  // No crossing (target unreachable or a local extremum): ternary search on the error nearby.
+  let x0 = xs[Math.max(0, best - 1)];
+  let x1 = xs[Math.min(samples, best + 1)];
+  for (let k = 0; k < 16; k++) {
+    const m0 = x0 + (x1 - x0) / 3;
+    const m1 = x1 - (x1 - x0) / 3;
+    if (err(distance(m0)) <= err(distance(m1))) x1 = m1;
+    else x0 = m0;
+  }
+  const m = 0.5 * (x0 + x1);
+  return err(distance(m)) <= err(ds[best]) ? m : xs[best];
 }

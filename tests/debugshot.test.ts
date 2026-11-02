@@ -46,7 +46,16 @@ describe('debug shots (synthetic deliveries)', () => {
     expect(Math.abs(total('P', p, 'green').total - 6)).toBeLessThan(0.2);
   });
   it('solveSpeed clamps to the bounds when the target is unreachable', () => {
-    expect(solveSpeed((mph) => mph, 500, 1, 130)).toBe(130);
-    expect(solveSpeed((mph) => mph + 10, 5, 1, 130)).toBe(1);
+    expect(solveSpeed((mph) => mph, 500, 1, 130)).toBeCloseTo(130, 3);
+    expect(solveSpeed((mph) => mph + 10, 5, 1, 130)).toBeCloseTo(1, 3);
+  });
+  it('solveSpeed copes with non-monotonic distances and hazards (NaN)', () => {
+    // Runs back down a bank between 20 and 60 mph; water beyond 90 mph.
+    const f = (v: number) => (v > 90 ? NaN : v < 20 ? v : v < 60 ? 20 - (v - 20) * 0.3 : (v - 60) * 2);
+    const v = solveSpeed(f, 30, 1, 135);
+    expect(Math.abs(f(v) - 30)).toBeLessThan(0.05);
+    expect(v).toBeGreaterThan(60);
+    expect(v).toBeLessThan(90);
+    expect(solveSpeed(() => NaN, 10, 1, 130)).toBe(1); // nothing usable → lo
   });
 });

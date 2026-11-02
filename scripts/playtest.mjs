@@ -223,26 +223,6 @@ for (const [hi, hole] of holes.entries()) {
       const s2 = await st();
       check('Space retake: back to the previous spot, +1', s2.strokes === s1.strokes + 1 && Math.hypot(s2.ball.x - tee.ball.x, s2.ball.z - tee.ball.z) < 0.5, `strokes ${s1.strokes}→${s2.strokes}, ${fmt(Math.hypot(s2.ball.x - tee.ball.x, s2.ball.z - tee.ball.z))} m from tee, lie ${s2.lie}`);
     }
-    // OOB: look for a shot that goes out of bounds.
-    const o = await page.evaluate(() => {
-      const g = window.__game;
-      for (const aim of [60, -60, 75, -75, 90, -90, 45, -45, 110, -110])
-        for (const mph of [110, 95, 80])
-          for (const club of [0, 1]) {
-            const p = g.debugPredict({ club, clubSpeed: mph, aim });
-            if (p.state === 'oob') return { club, clubSpeed: mph, aim };
-          }
-      return null;
-    });
-    check(`hole ${hole + 1}: found an out-of-bounds shot`, !!o, JSON.stringify(o));
-    if (o) {
-      const s1 = await st();
-      const res = await playStroke(o, { fast: true, shots: {} });
-      check('OOB: stroke and distance (back to the same spot, +2)', res.after.report?.result === 'oob' && res.after.strokes === s1.strokes + 2 && Math.hypot(res.after.ball.x - s1.ball.x, res.after.ball.z - s1.ball.z) < 0.5, `result=${res.after.report?.result} strokes ${s1.strokes}→${res.after.strokes} mode ${res.after.mode}`);
-      if (res.after.mode !== 'stance') await page.evaluate(() => window.__game.goToBall());
-      await frames(3);
-      await page.evaluate(() => window.__game.setAim(0));
-    }
   }
 
   // ── Play the hole out ──
@@ -318,6 +298,30 @@ for (const [hi, hole] of holes.entries()) {
   const nx = await st();
   check('Tab after holing goes to the next hole', nx.hole === (hole + 1) % 9 && nx.mode === 'stance' && nx.strokes === 0, `hole ${nx.hole + 1} mode ${nx.mode} strokes ${nx.strokes}`);
   log(`transitions: ${await drainTransitions()}`);
+}
+
+// ── Out of bounds: the course boundary is the map edge, reachable from hole 7's tee ──
+console.log('\n=== Out of bounds (hole 7 tee) ===');
+{
+  await page.evaluate(() => window.__game.start(6));
+  await frames(4);
+  const o = await page.evaluate(() => {
+    const g = window.__game;
+    for (let aim = -180; aim < 180; aim += 10)
+      for (const mph of [125, 110]) {
+        const p = g.debugPredict({ club: 0, clubSpeed: mph, aim });
+        if (p.state === 'oob') return { club: 0, clubSpeed: mph, aim };
+      }
+    return null;
+  });
+  check('found an out-of-bounds shot', !!o, JSON.stringify(o));
+  if (o) {
+    const s1 = await st();
+    const res = await playStroke(o, { fast: true, shots: {} });
+    check('OOB: stroke and distance (back to the same spot, +2)', res.after.report?.result === 'oob' && res.after.strokes === s1.strokes + 2 && Math.hypot(res.after.ball.x - s1.ball.x, res.after.ball.z - s1.ball.z) < 0.5, `result=${res.after.report?.result} strokes ${s1.strokes}→${res.after.strokes} mode ${res.after.mode} lie ${res.after.lie}`);
+    const a = await page.evaluate(() => window.__game.swing.aim);
+    check('aim resets to the pin after a shot', Math.abs(a) < 1e-6, `aim ${a}`);
+  }
 }
 
 // ── Stroke cap: whiff repeatedly on a fresh hole ──

@@ -23,6 +23,7 @@ import { BAG, SwingController, type SwingResult } from '../swing/SwingController
 import { nominalDelivery, solveSpeed, syntheticImpact, type DebugShotOpts } from '../swing/debugShot';
 import { Wind } from './Wind';
 import { Round } from './Round';
+import { dropSearchStart, findDropPoint } from './rules';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const tmpV = new THREE.Vector3();
@@ -69,6 +70,8 @@ export class Game {
   private rollSoundT = 0;
   private fastForward = false;
   private ballFlightPos = new THREE.Vector3();
+  /** Where the last shot came to rest (before any drop / stroke-and-distance). */
+  private restPos = new THREE.Vector3();
   private time = 0;
   private retakeArmedAt = -10;
   /** Shots this hole that can be retaken (ball positions before each stroke). */
@@ -362,7 +365,7 @@ export class Game {
     if (this.mode !== 'paused' && this.mode !== 'title') this.round.tick(dt, true);
 
     // Ball & uniforms
-    const ballPos = this.mode === 'flight' ? this.sim.pos : this.ball;
+    const ballPos = this.mode === 'flight' ? (this.settleTime > 0 ? this.restPos : this.sim.pos) : this.ball;
     this.mods.props.setBall(ballPos, this.mode === 'flight' ? this.sim.spin : undefined, dt);
     globalUniforms.uBallPos.value.copy(ballPos);
     globalUniforms.uPlayerPos.value.copy(this.mode === 'walk' ? this.player : this.ball);
@@ -542,7 +545,7 @@ export class Game {
     // Ball has stopped.
     if (this.settleTime === 0) this.onBallStopped();
     this.settleTime += dt;
-    this.rig.settle(this.sim.pos, dt, { close: this.shot?.result.delivery.club.kind === 'putter' || this.sim.lastSurface === 'green' });
+    this.rig.settle(this.restPos, dt, { close: this.shot?.result.delivery.club.kind === 'putter' || this.sim.lastSurface === 'green' });
     if (this.mode === 'flight' && this.settleTime > 1.6) {
       this.settleTime = 0;
       this.afterSettle();
@@ -578,6 +581,10 @@ export class Game {
     this.mods.effects.tracerEnd();
     const shot = this.shot;
     const st = this.sim.state;
+    // Where the ball actually finished (the settle camera keeps looking here even after a drop).
+    this.restPos.copy(this.sim.pos);
+    if (st === 'water') this.restPos.y -= 0.06; // sunk
+    const carry = this.sim.carryPos?.clone() ?? null;
     let result: ShotReport['result'] = this.sim.lastSurface;
     if (st === 'holed') {
       result = 'holed';
@@ -586,7 +593,7 @@ export class Game {
       this.round.addPenalty(GAMEPLAY.penaltyWater);
       this.ui.toast('Water hazard — penalty stroke. Dropped near where it went in.', 'bad');
       this.audio.crowd('groan');
-      this.placeBall(this.findDrop(this.sim.lastDry, shot?.origin ?? this.ball));
+      this.placeBall(this.findDrop(shot?.origin ?? this.prevBall));
       result = 'water';
     } else if (st === 'oob') {
       this.round.addPenalty(GAMEPLAY.penaltyOOB);
@@ -599,7 +606,7 @@ export class Game {
     }
     if (shot) {
       this.round.noteResult(shot.strokeNumber, result);
-      this.lastReport = this.makeReport(shot, result);
+      this.lastReport = this.makeReport(shot, result, this.restPos, carry);
       if (settings.get('showShotData')) this.ui.showShotReport(this.lastReport);
     }
     if (st === 'holed') {
@@ -651,18 +658,17 @@ export class Game {
     if (this.holedTime > 2.8 && (this.input.pressed('toggleStance') || this.input.pressed('retake'))) this.nextHole();
   }
 
-  private findDrop(lastDry: THREE.Vector3, origin: THREE.Vector3): THREE.Vector3 {
-    const p = lastDry.clone();
-    const back = new THREE.Vector3().subVectors(origin, lastDry).setY(0);
-    const len = back.length();
-    if (len > 0.01) back.normalize();
-    for (let i = 0; i < 120; i++) {
-      const s = this.course.surface(p.x, p.z);
-      const near = this.course.waterHeight(p.x + 1.5, p.z) ?? this.course.waterHeight(p.x - 1.5, p.z) ?? this.course.waterHeight(p.x, p.z + 1.5) ?? this.course.waterHeight(p.x, p.z - 1.5);
-      if (s !== 'water' && near === null && s !== 'oob') return p;
-      p.addScaledVector(back, 0.5);
-    }
-    return origin.clone();
+  /** Water relief: back on the line from where the ball went in toward where it was played from. */
+  private findDrop(origin: THREE.Vector3): THREE.Vector3 {
+    const c = this.course;
+    const clear = (x: number, z: number) => {
+      const s = c.surface(x, z);
+      if (s === 'water' || s === 'oob' || c.waterHeight(x, z) !== null) return false;
+      return c.waterHeight(x + 1.5, z) === null && c.waterHeight(x - 1.5, z) === null && c.waterHeight(x, z + 1.5) === null && c.waterHeight(x, z - 1.5) === null;
+    };
+    const start = dropSearchStart(this.sim.lastDry, this.sim.waterEntry ?? this.sim.pos, origin);
+    const p = findDropPoint(start, origin, clear);
+    return p ? new THREE.Vector3(p.x, 0, p.z) : origin.clone();
   }
 
   private retake() {
@@ -776,14 +782,13 @@ export class Game {
     return settings.get('units') === 'yards' ? `${Math.round(m / 0.9144)} yds` : `${Math.round(m)} m`;
   }
 
-  private makeReport(shot: PendingShot, result: ShotReport['result']): ShotReport {
+  private makeReport(shot: PendingShot, result: ShotReport['result'], end: THREE.Vector3, carry: THREE.Vector3 | null): ShotReport {
     const d = shot.result.delivery;
     const l = shot.launch;
-    const carryP = this.sim.carryPos ?? this.sim.pos;
+    const carryP = carry ?? end;
     const o = shot.origin;
     const a = shot.aimDir;
     const right = new THREE.Vector3().crossVectors(a, UP);
-    const end = this.sim.pos;
     const along = (p: THREE.Vector3) => (p.x - o.x) * a.x + (p.z - o.z) * a.z;
     return {
       club: d.club.name,
@@ -909,6 +914,7 @@ export class Game {
         mph = solveSpeed(
           (v) => {
             const pr = this.debugPredict({ ...o, aim: this.swing.aim, clubSpeed: v });
+            if (pr.state === 'water' || pr.state === 'oob') return NaN;
             return o.solveFor === 'carry' ? pr.carry : pr.along;
           },
           target,
