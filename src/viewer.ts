@@ -24,6 +24,7 @@ export async function runViewer(course: Course, grids: CourseGrids, view: string
   const { list, post } = enabledModules(mods);
   await world.init(course, grids, list, post);
   mods.props.setTreeColliders(mods.foliage.colliders);
+  (mods.foliage as { onCollidersChanged?: ((c: typeof mods.foliage.colliders) => void) | null }).onCollidersChanged = (c) => mods.props.setTreeColliders(c);
   mods.props.setActiveHole(0);
   world.mode = 'stance';
   window.__stats = () => world.stats();

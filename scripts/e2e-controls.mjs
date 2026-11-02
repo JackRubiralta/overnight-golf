@@ -3,6 +3,7 @@
 // and checks that the game state responds and that a shot is actually played.
 // Usage: node scripts/e2e-controls.mjs [port]   (expects `npx vite` running on that port)
 import { chromium } from './pw.mjs';
+import fs from 'node:fs';
 
 const port = process.argv[2] || '5173';
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-gpu-watchdog'] });
@@ -18,6 +19,10 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`);
   if (!ok) failures++;
 };
+const capture = async (path) => {
+  const d = await page.evaluate(() => window.__game?.capture?.());
+  if (d) fs.writeFileSync(path, Buffer.from(d.split(',')[1], 'base64'));
+};
 const g = () => page.evaluate(() => {
   const s = window.__game;
   return { mode: s.mode, strokes: s.strokes, swing: s.swing, sim: s.simState, report: s.lastReport, ball: s.ball };
@@ -31,7 +36,7 @@ const tap = async (key, times = 1) => {
   }
 };
 
-await page.goto(`http://localhost:${port}/?play=0`);
+await page.goto(`http://localhost:${port}/?play=0&q=low`);
 await page.waitForFunction(() => window.__ready === true && window.__game, null, { timeout: 240000 });
 await page.waitForTimeout(1500);
 // Give the canvas focus.
@@ -131,7 +136,7 @@ for (let i = 0; i < 60 && !started; i++) {
 }
 check('LMB drag swing hits the ball', started, `mode=${s.mode} strokes=${s.strokes}`);
 if (started) {
-  await page.screenshot({ path: 'screenshots/_tmp/e2e-flight.png' });
+  await capture('screenshots/_tmp/e2e-flight.png');
   // Wait for the ball to stop (fast-forward with F held).
   await page.keyboard.down('KeyF');
   for (let i = 0; i < 160; i++) {
@@ -144,7 +149,7 @@ if (started) {
   check('shot produces a shot report', !!r, r ? `${r.club} ${r.clubSpeedMph.toFixed(0)} mph, ${r.quality}, carry ${(r.carry / 0.9144).toFixed(0)} yd, total ${(r.total / 0.9144).toFixed(0)} yd, offline ${(r.offline / 0.9144).toFixed(1)} yd, result ${r.result}` : 'none');
   check('stroke counted', s.strokes >= 1, `strokes=${s.strokes}`);
   await page.waitForTimeout(2500);
-  await page.screenshot({ path: 'screenshots/_tmp/e2e-after.png' });
+  await capture('screenshots/_tmp/e2e-after.png');
 }
 const uniq = [...new Set(errors)];
 check('no console errors', uniq.length === 0, uniq.slice(0, 5).join(' | ').slice(0, 600));

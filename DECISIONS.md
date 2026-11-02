@@ -15,7 +15,7 @@ Decisions made autonomously during the overnight build, with the reasoning. Newe
 | Post | `postprocessing@6.39.6` + `n8ao@2.0.1` | Mature, MIT/ISC, compatible with r187 (research §10). |
 | Ball physics | Our own code (`src/physics`) | Full control. D-plane impact, drag/Magnus with spin-ratio models, Penner-style turf bounce, rolling with slope gravity. |
 | Prop physics | Rapier (`@dimforge/rapier3d-compat`) | Used for props and breakables only, per the brief. |
-| Trees | `@dgreenheck/ez-tree@1.1.0` (MIT) + instancing | Procedural, offline, permissive licence. |
+| Trees | Own branch generator (inspired by `@dgreenheck/ez-tree`, MIT), 10 variants, instanced LOD0/LOD1 + baked 8-view impostors | ez-tree's ES build inlines ~4 MB of textures; our generator is small, fully procedural and offline. |
 | Course data | Analytic SDFs + layered noise, baked into a 1281² grid (1.25 m) by a Web Worker pool | One source of truth. The physics height uses the same triangulation as the rendered mesh, so the ball never floats or sinks. Surfaces use exact analytic SDFs. |
 | Mask encoding | Two RGBA8 textures storing *signed distances* (±8 m, 6 cm steps), not hard masks | Shaders threshold the SDF with noise, so surface edges stay crisp at any distance even with a 1.25 m texel. |
 | Units | SI internally. Yards/mph in the UI by default (metres option). | |

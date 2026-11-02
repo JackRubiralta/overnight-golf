@@ -55,6 +55,7 @@ async function boot() {
   const { list, post } = enabledModules(mods);
   await world.init(course, grids, list, post);
   mods.props.setTreeColliders(mods.foliage.colliders);
+  (mods.foliage as { onCollidersChanged?: ((c: typeof mods.foliage.colliders) => void) | null }).onCollidersChanged = (c) => mods.props.setTreeColliders(c);
   ui.setLoading(0.95, 'Raking the bunkers…');
   const game = new Game(world, mods, course, { input, audio, ui, handlers });
   window.__stats = () => world.stats();
